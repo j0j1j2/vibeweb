@@ -51,8 +51,13 @@ export class SessionManager {
         Binds: [
           `${previewDir}:/workspace:rw`,
           `${dbDir}:/data/db:rw`,
-          `${path.join(this.tenantsDir, "..", "claude-auth")}:/root/.claude:ro`,
         ],
+        Mounts: [{
+          Type: "volume" as const,
+          Source: "vibeweb_claude-auth",
+          Target: "/root/.claude",
+          ReadOnly: true,
+        }],
         PortBindings: { [`${SESSION_BRIDGE_PORT}/tcp`]: [{ HostPort: "0" }] },
         Memory: parseMemoryLimit(SESSION_MEMORY_LIMIT),
         NanoCpus: SESSION_CPU_LIMIT * 1e9,

@@ -31,34 +31,42 @@ app.post("/auth/claude/login", async (req, reply) => {
   fs.mkdirSync(claudeAuthDir, { recursive: true });
 
   try {
-    // Run claude login in a temp session container
+    // Run claude auth login in a temp session container using named volume
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
-      Cmd: ["claude", "login"],
+      Cmd: ["claude", "auth", "login"],
       Env: [`HOME=/root`],
       HostConfig: {
-        Binds: [`${claudeAuthDir}:/root/.claude:rw`],
+        Mounts: [{
+          Type: "volume",
+          Source: "vibeweb_claude-auth",
+          Target: "/root/.claude",
+          ReadOnly: false,
+        }],
       },
       Labels: { "vibeweb.role": "auth-login" },
-      Tty: true,
-      OpenStdin: true,
+      Tty: false,
+      OpenStdin: false,
     });
 
     await container.start();
 
-    // Capture output to find the URL
+    // Capture output to find the OAuth URL
     const stream = await container.logs({ follow: true, stdout: true, stderr: true });
 
     const url = await new Promise<string>((resolve, reject) => {
       let output = "";
       const timeout = setTimeout(() => {
-        reject(new Error("Timeout waiting for login URL"));
+        reject(new Error("Timeout waiting for login URL. Output: " + output.substring(0, 500)));
       }, 30000);
 
       stream.on("data", (chunk: Buffer) => {
-        output += chunk.toString();
-        // Look for URL pattern in claude login output
-        const urlMatch = output.match(/(https:\/\/[^\s\x00-\x1f]+)/);
+        // Strip Docker stream header (8 bytes per frame when Tty=false)
+        const raw = chunk.toString();
+        output += raw;
+        // Match URL — strip any ANSI escape codes first
+        const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n\r]/g, "");
+        const urlMatch = clean.match(/(https:\/\/claude\.com\/[^\s]+)/);
         if (urlMatch) {
           clearTimeout(timeout);
           resolve(urlMatch[1]);
@@ -67,12 +75,9 @@ app.post("/auth/claude/login", async (req, reply) => {
 
       stream.on("end", () => {
         clearTimeout(timeout);
-        reject(new Error("Stream ended without URL. Output: " + output.substring(0, 200)));
+        reject(new Error("Stream ended without URL. Output: " + output.substring(0, 500)));
       });
     });
-
-    // Store container ID for cleanup later
-    const containerId = container.id;
 
     // Wait for auth to complete in background (container will exit when done)
     container.wait().then(() => {
@@ -80,7 +85,7 @@ app.post("/auth/claude/login", async (req, reply) => {
       app.log.info("Claude login container completed");
     }).catch(() => {});
 
-    return { url, containerId };
+    return { url };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to start login";
     return reply.status(500).send({ error: message });
