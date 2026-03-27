@@ -65,6 +65,13 @@ services:
     depends_on:
       - control-api
 
+  console:
+    build:
+      context: .
+      dockerfile: packages/console/Dockerfile
+    ports:
+      - "5173:80"
+
 volumes:
   app-data:
     driver: local

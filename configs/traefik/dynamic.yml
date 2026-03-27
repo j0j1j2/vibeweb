@@ -7,6 +7,13 @@ http:
           - "X-Tenant-Id"
 
   routers:
+    console:
+      rule: "Host(`console.vibeweb.localhost`)"
+      service: console
+      entryPoints:
+        - web
+      priority: 200
+
     control-api:
       rule: "Host(`vibeweb.localhost`)"
       service: control-api
@@ -76,6 +83,11 @@ http:
       loadBalancer:
         servers:
           - url: "http://agent-service:3003"
+
+    console:
+      loadBalancer:
+        servers:
+          - url: "http://console:80"
 
     site-server:
       loadBalancer:
