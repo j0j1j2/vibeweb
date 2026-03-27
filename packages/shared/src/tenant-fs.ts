@@ -30,10 +30,22 @@ const DEFAULT_INDEX_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Site</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #fafafa; color: #111; min-height: 100vh; display: flex; flex-direction: column; }
+    .hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
+    .hero h1 { font-size: 3rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; background: linear-gradient(135deg, #7c3aed, #4f46e5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { font-size: 1.125rem; color: #666; max-width: 480px; line-height: 1.6; }
+    .badge { display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 2rem; padding: 0.5rem 1rem; background: white; border: 1px solid #e5e7eb; border-radius: 999px; font-size: 0.875rem; color: #888; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+  </style>
 </head>
 <body>
-  <h1>Welcome to your site!</h1>
-  <p>Start editing to make it yours.</p>
+  <div class="hero">
+    <h1>Hello, World</h1>
+    <p>Your site is live. Open the chat panel and describe what you want to build.</p>
+    <div class="badge"><span class="dot"></span> Powered by VibeWeb</div>
+  </div>
 </body>
 </html>`;
 
@@ -44,6 +56,7 @@ export function initTenantDir(paths: TenantPaths): void {
   fs.mkdirSync(paths.previewPublic, { recursive: true });
   fs.mkdirSync(paths.previewFunctions, { recursive: true });
   fs.writeFileSync(path.join(paths.public, "index.html"), DEFAULT_INDEX_HTML);
+  fs.writeFileSync(path.join(paths.previewPublic, "index.html"), DEFAULT_INDEX_HTML);
 
   // Initialize empty tenant SQLite database
   const dbPath = path.join(paths.db, "tenant.db");
