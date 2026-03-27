@@ -63,7 +63,9 @@ function runClaude(prompt) {
   let buffer = "";
 
   claudeProcess.stdout.on("data", (chunk) => {
-    buffer += chunk.toString();
+    const raw = chunk.toString();
+    console.log(`Claude stdout (${raw.length} bytes): ${raw.substring(0, 200)}`);
+    buffer += raw;
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
 

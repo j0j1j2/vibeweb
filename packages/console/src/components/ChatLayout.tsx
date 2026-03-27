@@ -55,8 +55,22 @@ export function ChatLayout({ children }: { children: ReactNode }) {
           }
           const updated = [...prev];
           const current = { ...updated[updated.length - 1] };
-          if (msg.data?.type === "assistant" || msg.data?.type === "text") current.content += msg.data.content ?? "";
-          else if (msg.data?.type === "tool_use") current.toolUse = [...(current.toolUse ?? []), { tool: msg.data.tool, path: msg.data.path }];
+          if (msg.data?.type === "assistant") {
+            // stream-json format: data.message.content is array of {type:"text",text:"..."}
+            const msgContent = msg.data.message?.content;
+            if (Array.isArray(msgContent)) {
+              for (const block of msgContent) {
+                if (block.type === "text") current.content += block.text ?? "";
+                else if (block.type === "tool_use") current.toolUse = [...(current.toolUse ?? []), { tool: block.name, path: block.input?.file_path }];
+              }
+            } else if (typeof msg.data.content === "string") {
+              current.content += msg.data.content;
+            }
+          } else if (msg.data?.type === "text") {
+            current.content += msg.data.content ?? "";
+          } else if (msg.data?.type === "tool_use") {
+            current.toolUse = [...(current.toolUse ?? []), { tool: msg.data.tool ?? msg.data.name, path: msg.data.path }];
+          }
           updated[updated.length - 1] = current;
           return updated;
         });
