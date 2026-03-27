@@ -27,13 +27,13 @@ export function DbExplorer({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-white/[0.06]">
+      <div className="p-3 border-b border-gray-100">
         <div className="flex gap-2">
           <textarea
             value={sql}
             onChange={(e) => setSql(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[13px] font-mono text-white/80 placeholder:text-white/20 resize-none focus:outline-none focus:border-violet-500/50 transition-colors"
+            className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-[13px] font-mono text-gray-700 placeholder:text-gray-300 resize-none focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
             rows={3}
             placeholder="SELECT * FROM ..."
           />
@@ -42,25 +42,25 @@ export function DbExplorer({ tenantId }: { tenantId: string }) {
             <Play className="w-4 h-4" />
           </button>
         </div>
-        {error && <p className="mt-2 text-red-400 text-[13px]">{error}</p>}
+        {error && <p className="mt-2 text-red-500 text-[13px]">{error}</p>}
       </div>
       <div className="flex-1 overflow-auto">
         {result && (
           <div>
-            <div className="px-4 py-2 text-[11px] text-white/30 border-b border-white/[0.06]">{result.count} row{result.count !== 1 ? "s" : ""}</div>
+            <div className="px-4 py-2 text-[11px] text-gray-400 border-b border-gray-100">{result.count} row{result.count !== 1 ? "s" : ""}</div>
             <table className="w-full text-[13px]">
-              <thead><tr className="border-b border-white/[0.06]">
-                {result.columns.map((col) => <th key={col} className="text-left px-4 py-2.5 font-medium text-[11px] uppercase text-white/30 tracking-wider">{col}</th>)}
+              <thead><tr className="border-b border-gray-100">
+                {result.columns.map((col) => <th key={col} className="text-left px-4 py-2.5 font-medium text-[11px] uppercase text-gray-400 tracking-wider">{col}</th>)}
               </tr></thead>
               <tbody>{result.rows.map((row, i) => (
-                <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
-                  {result.columns.map((col) => <td key={col} className="px-4 py-2 font-mono text-[12px] text-white/60">{String(row[col] ?? "NULL")}</td>)}
+                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  {result.columns.map((col) => <td key={col} className="px-4 py-2 font-mono text-[12px] text-gray-600">{String(row[col] ?? "NULL")}</td>)}
                 </tr>
               ))}</tbody>
             </table>
           </div>
         )}
-        {!result && !error && <div className="flex items-center justify-center h-full text-white/20 text-sm">Run a query (Ctrl+Enter)</div>}
+        {!result && !error && <div className="flex items-center justify-center h-full text-gray-300 text-sm">Run a query (Ctrl+Enter)</div>}
       </div>
     </div>
   );

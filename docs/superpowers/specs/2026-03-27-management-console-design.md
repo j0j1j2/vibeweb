@@ -78,7 +78,9 @@ API key-based authentication using existing tenant `api_key` field.
 
 ## Layout
 
-**Global layout:** Tree sidebar (left, fixed 220px) + main area (right, flex).
+**Theme:** Light/white theme with violet accent color (#7c3aed).
+
+**Global layout:** Tree sidebar (left, fixed 240px) + main area (right, flex).
 
 **Tree sidebar content:**
 - Admin login: Admin section (Dashboard, Tenants) + all tenant entries
@@ -101,13 +103,12 @@ API key-based authentication using existing tenant `api_key` field.
 
 ### ChatPage (`/t/:tenantId/chat`)
 
-Split layout: chat panel (left 35%) + tabbed main area (right 65%).
+Split layout: tabbed main area (left, flex) + chat panel (right, fixed 380px).
 
-**Chat panel:**
-- Message list (scrollable, auto-scroll to bottom)
-- User messages (right-aligned, dark background)
-- Claude responses (left-aligned, purple tint) — streamed in real-time
-- Tool use indicators (file edit, bash command) shown inline
+**Chat panel (right):**
+- Message list with avatar icons (User/Bot)
+- Claude responses streamed in real-time with typing indicator
+- Tool use indicators shown as inline badges
 - Input area: textarea + send button, Ctrl+Enter to send
 
 **WebSocket connection:**
@@ -119,7 +120,7 @@ Split layout: chat panel (left 35%) + tabbed main area (right 65%).
 6. Receive `message.done` → mark message complete
 7. On page leave, send `session.end`
 
-**Tabbed main area:**
+**Tabbed main area (left):**
 - **Preview** (default): iframe loading `{subdomain}.vibeweb.localhost?preview=true`. Auto-refreshes via Preview Server's existing WebSocket live reload.
 - **Files**: read-only file tree + syntax-highlighted code viewer (using simple `<pre>` + CSS syntax highlighting). Shows files changed during current session.
 - **DB**: quick view of tenant database tables and row counts.

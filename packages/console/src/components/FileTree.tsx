@@ -38,7 +38,7 @@ export function FileTree({ tenantId, onSelect, selectedPath }: { tenantId: strin
   return (
     <div className="p-2 text-[13px] overflow-y-auto h-full">
       {tree.map((node) => <TreeItem key={node.path} node={node} expanded={expanded} toggleExpand={toggleExpand} onSelect={onSelect} selectedPath={selectedPath} depth={0} />)}
-      {files.length === 0 && <div className="text-white/20 text-center mt-12">No files</div>}
+      {files.length === 0 && <div className="text-gray-300 text-center mt-12">No files</div>}
     </div>
   );
 }
@@ -55,16 +55,16 @@ function TreeItem({ node, expanded, toggleExpand, onSelect, selectedPath, depth 
         onClick={() => { if (node.isFile) onSelect?.(node.path); else toggleExpand(node.path); }}
         className={cn(
           "flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-left transition-colors",
-          isSelected ? "bg-white/[0.08] text-white" : "text-white/50 hover:text-white/70 hover:bg-white/[0.04]"
+          isSelected ? "bg-violet-50 text-violet-700" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
         )}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >
         {node.isFile ? (
-          <File className="w-3.5 h-3.5 text-white/25" />
+          <File className="w-3.5 h-3.5 text-gray-300" />
         ) : isExpanded ? (
-          <><ChevronDown className="w-3 h-3 text-white/25" /><Folder className="w-3.5 h-3.5 text-violet-400/60" /></>
+          <><ChevronDown className="w-3 h-3 text-gray-300" /><Folder className="w-3.5 h-3.5 text-violet-400" /></>
         ) : (
-          <><ChevronRight className="w-3 h-3 text-white/25" /><Folder className="w-3.5 h-3.5 text-violet-400/60" /></>
+          <><ChevronRight className="w-3 h-3 text-gray-300" /><Folder className="w-3.5 h-3.5 text-violet-400" /></>
         )}
         <span className="truncate">{node.name}</span>
       </button>

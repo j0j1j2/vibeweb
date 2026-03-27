@@ -90,17 +90,16 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full">
-      {/* Main area — tabs */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center gap-1 px-3 py-2 border-b border-white/[0.06] bg-[#0f0f13]">
+        <div className="flex items-center gap-1 px-3 py-2 border-b border-gray-100 bg-white">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
                 activeTab === id
-                  ? "bg-white/[0.08] text-white"
-                  : "text-white/35 hover:text-white/55 hover:bg-white/[0.04]"
+                  ? "bg-violet-50 text-violet-700"
+                  : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -108,14 +107,13 @@ export function ChatPage() {
             </button>
           ))}
         </div>
-        <div className="flex-1 overflow-hidden bg-[#111116]">
+        <div className="flex-1 overflow-hidden bg-white">
           {activeTab === "preview" && subdomain && <PreviewFrame subdomain={subdomain} />}
           {activeTab === "files" && tenantId && <FileTree tenantId={tenantId} />}
           {activeTab === "db" && tenantId && <DbExplorer tenantId={tenantId} />}
         </div>
       </div>
 
-      {/* Chat panel — right side */}
       <div className="w-[380px] flex-shrink-0">
         <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} />
       </div>
