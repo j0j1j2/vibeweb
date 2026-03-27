@@ -1,16 +1,37 @@
 import { useState, useEffect, useCallback } from "react";
-import { listTenants, createTenant } from "@/api";
-import { TenantTable } from "@/components/TenantTable";
-import { Plus } from "lucide-react";
+import { Link } from "react-router-dom";
+import { listTenants, createTenant, deleteTenant } from "@/api";
+import {
+  Plus, Trash2, ExternalLink, CheckCircle, XCircle,
+  ExternalLink as LinkIcon, Loader2, ChevronDown, ChevronRight,
+} from "lucide-react";
+
+interface Tenant { id: string; subdomain: string; name: string; status: string; created_at: string; }
 
 export function AdminPage() {
-  const [tenants, setTenants] = useState<any[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [subdomain, setSubdomain] = useState("");
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [claudeStatuses, setClaudeStatuses] = useState<Record<string, boolean>>({});
+  const [expandedAuth, setExpandedAuth] = useState<string | null>(null);
 
-  const refresh = useCallback(() => { listTenants().then(setTenants).catch(() => {}); }, []);
+  const refresh = useCallback(async () => {
+    const data = await listTenants().catch(() => []);
+    setTenants(data);
+    // Fetch claude status for each tenant
+    const statuses: Record<string, boolean> = {};
+    await Promise.all(data.map(async (t: Tenant) => {
+      try {
+        const res = await fetch(`/agent-api/auth/claude/${t.id}/status`);
+        const s = await res.json();
+        statuses[t.id] = s.connected;
+      } catch { statuses[t.id] = false; }
+    }));
+    setClaudeStatuses(statuses);
+  }, []);
+
   useEffect(() => { refresh(); }, [refresh]);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -24,6 +45,12 @@ export function AdminPage() {
     refresh();
   };
 
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Delete tenant "${name}"? This cannot be undone.`)) return;
+    await deleteTenant(id);
+    refresh();
+  };
+
   return (
     <div className="p-8 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
@@ -33,6 +60,7 @@ export function AdminPage() {
           <Plus className="w-4 h-4" /> New Tenant
         </button>
       </div>
+
       {showCreate && (
         <form onSubmit={handleCreate} className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50 flex gap-3 items-end">
           <div className="flex-1">
@@ -51,7 +79,165 @@ export function AdminPage() {
           </button>
         </form>
       )}
-      <TenantTable tenants={tenants} onRefresh={refresh} />
+
+      {/* Tenant list with Claude connection management */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Subdomain</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Claude</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tenants.map((t) => (
+              <TenantRow
+                key={t.id}
+                tenant={t}
+                claudeConnected={claudeStatuses[t.id] ?? false}
+                expanded={expandedAuth === t.id}
+                onToggleAuth={() => setExpandedAuth(expandedAuth === t.id ? null : t.id)}
+                onDelete={() => handleDelete(t.id, t.name)}
+                onRefresh={refresh}
+              />
+            ))}
+            {tenants.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-12 text-center text-gray-400">No tenants yet</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
+  );
+}
+
+function TenantRow({ tenant, claudeConnected, expanded, onToggleAuth, onDelete, onRefresh }: {
+  tenant: Tenant;
+  claudeConnected: boolean;
+  expanded: boolean;
+  onToggleAuth: () => void;
+  onDelete: () => void;
+  onRefresh: () => void;
+}) {
+  const [loginUrl, setLoginUrl] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [authCode, setAuthCode] = useState("");
+  const [codeSubmitting, setCodeSubmitting] = useState(false);
+  const [codeError, setCodeError] = useState("");
+
+  const handleLogin = async () => {
+    setLoginLoading(true); setLoginUrl(null); setCodeError("");
+    try {
+      const res = await fetch(`/agent-api/auth/claude/${tenant.id}/login`, { method: "POST" });
+      const data = await res.json();
+      if (data.url) setLoginUrl(data.url);
+      else setCodeError(data.error || "Failed");
+    } catch { setCodeError("Failed"); }
+    finally { setLoginLoading(false); }
+  };
+
+  const handleSubmitCode = async () => {
+    if (!authCode.trim()) return;
+    setCodeSubmitting(true); setCodeError("");
+    try {
+      const res = await fetch(`/agent-api/auth/claude/${tenant.id}/code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: authCode.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) { setLoginUrl(null); setAuthCode(""); onRefresh(); }
+      else setCodeError(data.error || "Failed");
+    } catch { setCodeError("Failed"); }
+    finally { setCodeSubmitting(false); }
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm(`Disconnect Claude for "${tenant.name}"?`)) return;
+    await fetch(`/agent-api/auth/claude/${tenant.id}`, { method: "DELETE" });
+    setLoginUrl(null); setAuthCode("");
+    onRefresh();
+  };
+
+  return (
+    <>
+      <tr className="border-t border-gray-100 hover:bg-gray-50/50">
+        <td className="px-4 py-3 font-medium text-gray-900">{tenant.name}</td>
+        <td className="px-4 py-3 text-gray-500 font-mono text-xs">{tenant.subdomain}</td>
+        <td className="px-4 py-3">
+          <button onClick={onToggleAuth} className="flex items-center gap-1.5">
+            {claudeConnected
+              ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle className="w-3 h-3" />Connected</span>
+              : <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full"><XCircle className="w-3 h-3" />Not connected</span>
+            }
+            {expanded ? <ChevronDown className="w-3 h-3 text-gray-400" /> : <ChevronRight className="w-3 h-3 text-gray-400" />}
+          </button>
+        </td>
+        <td className="px-4 py-3">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+            tenant.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"
+          }`}>{tenant.status}</span>
+        </td>
+        <td className="px-4 py-3 text-right space-x-1">
+          <Link to={`/t/${tenant.id}/chat`}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-violet-600 hover:bg-violet-50">
+            <ExternalLink className="w-3 h-3" /> Open
+          </Link>
+          <button onClick={onDelete}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-red-500 hover:bg-red-50">
+            <Trash2 className="w-3 h-3" /> Delete
+          </button>
+        </td>
+      </tr>
+
+      {/* Expanded Claude auth panel */}
+      {expanded && (
+        <tr className="border-t border-gray-50">
+          <td colSpan={5} className="px-6 py-4 bg-gray-50/50">
+            {claudeConnected ? (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Claude account connected for this tenant.</span>
+                <button onClick={handleDisconnect} className="text-sm text-red-500 hover:underline">Disconnect</button>
+              </div>
+            ) : (
+              <div className="space-y-3 max-w-xl">
+                {loginUrl ? (
+                  <>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-1.5">Step 1: Open this URL and sign in</p>
+                      <a href={loginUrl} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-sm text-violet-600 hover:underline break-all">
+                        <LinkIcon className="w-3.5 h-3.5 flex-shrink-0" />{loginUrl.substring(0, 70)}...
+                      </a>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-1.5">Step 2: Paste the authorization code</p>
+                      <div className="flex gap-2">
+                        <input value={authCode} onChange={(e) => setAuthCode(e.target.value)} placeholder="Paste code here..."
+                          className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
+                        <button onClick={handleSubmitCode} disabled={codeSubmitting || !authCode.trim()}
+                          className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40">
+                          {codeSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit"}
+                        </button>
+                      </div>
+                      {codeError && <p className="mt-1 text-sm text-red-500">{codeError}</p>}
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={handleLogin} disabled={loginLoading}
+                    className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40">
+                    {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {loginLoading ? "Starting..." : "Connect Claude Account"}
+                  </button>
+                )}
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
