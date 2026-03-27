@@ -25,8 +25,8 @@ const proxies = new Map<string, SessionProxy>();
 
 app.get("/health", async () => ({ status: "ok" }));
 
-// Track active login containers per tenant
-const loginContainers = new Map<string, Docker.Container>();
+// Track active login containers per tenant (container + stdin stream)
+const loginContainers = new Map<string, { container: Docker.Container; stream: NodeJS.ReadWriteStream }>();
 
 // POST /auth/claude/:tenantId/login - Start claude login flow for a tenant
 app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async (req, reply) => {
@@ -37,24 +37,39 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
 
   const prev = loginContainers.get(tenantId);
   if (prev) {
-    try { await prev.stop(); await prev.remove(); } catch {}
+    try { await prev.container.stop(); await prev.container.remove(); } catch {}
     loginContainers.delete(tenantId);
   }
 
   const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
 
   try {
-    // Step 1: Get OAuth URL from a throwaway container (stdin=/dev/null so it doesn't block)
-    const urlContainer = await docker.createContainer({
+    // Create container with Tty + stdin for interactive claude auth login
+    const container = await docker.createContainer({
       Image: SESSION_IMAGE,
-      Cmd: ["sh", "-c", "claude auth login < /dev/null"],
+      Cmd: ["sh", "-c", `
+        mkdir -p /data/tenants/${tenantId}/claude-auth &&
+        rm -f /root/.claude && ln -s /data/tenants/${tenantId}/claude-auth /root/.claude &&
+        claude auth login
+      `],
       Env: [`HOME=/root`],
-      Labels: { "vibeweb.role": "auth-login-url" },
-      Tty: false,
+      HostConfig: {
+        Mounts: [
+          { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
+        ],
+      },
+      Labels: { "vibeweb.role": "auth-login", "vibeweb.tenant": tenantId },
+      Tty: true,
+      OpenStdin: true,
+      AttachStdin: true,
+      AttachStdout: true,
     });
-    await urlContainer.start();
 
-    const stream = await urlContainer.logs({ follow: true, stdout: true, stderr: true });
+    // Attach BEFORE start to capture stdin stream
+    const stream = await container.attach({ stream: true, stdin: true, stdout: true, hijack: true });
+    await container.start();
+
+    // Capture output to find the OAuth URL
     const url = await new Promise<string>((resolve, reject) => {
       let output = "";
       const timeout = setTimeout(() => reject(new Error("Timeout. Output: " + output.substring(0, 500))), 15000);
@@ -64,15 +79,25 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
         const m = clean.match(/(https:\/\/claude\.com\/[^\s]+)/);
         if (m) { clearTimeout(timeout); resolve(m[1]); }
       });
-      stream.on("end", () => { clearTimeout(timeout); reject(new Error("No URL found")); });
     });
 
-    // Kill URL container — we only needed the URL
-    urlContainer.stop().then(() => urlContainer.remove()).catch(() => {});
+    // Store container + stream for code submission
+    loginContainers.set(tenantId, { container, stream });
 
-    // Mark login as active for this tenant
-    loginContainers.set(tenantId, urlContainer);
-    setTimeout(() => loginContainers.delete(tenantId), 300_000);
+    // Auto-cleanup after 5 minutes
+    setTimeout(async () => {
+      if (loginContainers.has(tenantId)) {
+        const entry = loginContainers.get(tenantId)!;
+        try { await entry.container.stop(); await entry.container.remove(); } catch {}
+        loginContainers.delete(tenantId);
+      }
+    }, 300_000);
+
+    // Auto-cleanup when container exits
+    container.wait().then(() => {
+      container.remove().catch(() => {});
+      app.log.info(`Login container for ${tenantId} exited`);
+    });
 
     return { url };
   } catch (err) {
@@ -87,50 +112,28 @@ app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude
   const { code } = req.body;
   if (!code) return reply.status(400).send({ error: "code is required" });
 
-  if (!loginContainers.has(tenantId)) {
+  const entry = loginContainers.get(tenantId);
+  if (!entry) {
     return reply.status(404).send({ error: "no active login session. Click Connect first." });
   }
 
-  const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
-
   try {
-    // Step 2: Run a NEW container that pipes the code into claude auth login
-    // This container saves credentials to the tenant's claude-auth directory
-    const safeCode = code.replace(/'/g, "'\\''");
-    const authContainer = await docker.createContainer({
-      Image: SESSION_IMAGE,
-      Cmd: ["sh", "-c", `
-        mkdir -p /data/tenants/${tenantId}/claude-auth &&
-        rm -f /root/.claude && ln -s /data/tenants/${tenantId}/claude-auth /root/.claude &&
-        echo '${safeCode}' | claude auth login
-      `],
-      Env: [`HOME=/root`],
-      HostConfig: {
-        Mounts: [
-          { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
-        ],
-      },
-      Labels: { "vibeweb.role": "auth-login-code", "vibeweb.tenant": tenantId },
-      Tty: false,
-    });
+    // Write the code to the container's stdin via the hijacked stream
+    entry.stream.write(code + "\n");
+    app.log.info(`Sent auth code to login container for ${tenantId}`);
 
-    await authContainer.start();
-
-    // Wait for it to complete
+    // Wait for container to exit (auth completes)
     await Promise.race([
-      authContainer.wait(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 60000)),
+      entry.container.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000)),
     ]);
 
-    // Check logs for success/failure
-    const logs = (await authContainer.logs({ stdout: true, stderr: true })).toString();
-    await authContainer.remove().catch(() => {});
     loginContainers.delete(tenantId);
 
+    // Check if credentials were saved
     const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
     const hasCredentials = checkCredentials(claudeAuthDir);
-
-    app.log.info(`Auth result for ${tenantId}: credentials=${hasCredentials}, logs=${logs.substring(0, 200)}`);
+    app.log.info(`Auth result for ${tenantId}: credentials=${hasCredentials}`);
 
     return { success: hasCredentials };
   } catch (err) {
