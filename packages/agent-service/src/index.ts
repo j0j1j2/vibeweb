@@ -44,61 +44,35 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
   const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
 
   try {
-    const container = await docker.createContainer({
+    // Step 1: Get OAuth URL from a throwaway container (stdin=/dev/null so it doesn't block)
+    const urlContainer = await docker.createContainer({
       Image: SESSION_IMAGE,
-      Cmd: ["sh", "-c", `
-        mkdir -p /data/tenants/${tenantId}/claude-auth &&
-        ln -s /data/tenants/${tenantId}/claude-auth /root/.claude &&
-        exec claude auth login
-      `],
+      Cmd: ["sh", "-c", "claude auth login < /dev/null"],
       Env: [`HOME=/root`],
-      HostConfig: {
-        Mounts: [
-          { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
-        ],
-      },
-      Labels: { "vibeweb.role": "auth-login", "vibeweb.tenant": tenantId },
+      Labels: { "vibeweb.role": "auth-login-url" },
       Tty: false,
-      OpenStdin: true,
-      AttachStdin: true,
     });
+    await urlContainer.start();
 
-    await container.start();
-    loginContainers.set(tenantId, container);
-
-    // Capture output to find the OAuth URL
-    const stream = await container.logs({ follow: true, stdout: true, stderr: true });
-
+    const stream = await urlContainer.logs({ follow: true, stdout: true, stderr: true });
     const url = await new Promise<string>((resolve, reject) => {
       let output = "";
-      const timeout = setTimeout(() => {
-        reject(new Error("Timeout waiting for login URL. Output: " + output.substring(0, 500)));
-      }, 30000);
-
+      const timeout = setTimeout(() => reject(new Error("Timeout. Output: " + output.substring(0, 500))), 15000);
       stream.on("data", (chunk: Buffer) => {
-        const raw = chunk.toString();
-        output += raw;
+        output += chunk.toString();
         const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n\r]/g, "");
-        const urlMatch = clean.match(/(https:\/\/claude\.com\/[^\s]+)/);
-        if (urlMatch) {
-          clearTimeout(timeout);
-          resolve(urlMatch[1]);
-        }
+        const m = clean.match(/(https:\/\/claude\.com\/[^\s]+)/);
+        if (m) { clearTimeout(timeout); resolve(m[1]); }
       });
-
-      stream.on("end", () => {
-        clearTimeout(timeout);
-        reject(new Error("Stream ended without URL. Output: " + output.substring(0, 500)));
-      });
+      stream.on("end", () => { clearTimeout(timeout); reject(new Error("No URL found")); });
     });
 
-    // Auto-cleanup after 5 minutes
-    setTimeout(async () => {
-      if (loginContainers.get(tenantId) === container) {
-        try { await container.stop(); await container.remove(); } catch {}
-        loginContainers.delete(tenantId);
-      }
-    }, 300_000);
+    // Kill URL container — we only needed the URL
+    urlContainer.stop().then(() => urlContainer.remove()).catch(() => {});
+
+    // Mark login as active for this tenant
+    loginContainers.set(tenantId, urlContainer);
+    setTimeout(() => loginContainers.delete(tenantId), 300_000);
 
     return { url };
   } catch (err) {
@@ -113,31 +87,55 @@ app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude
   const { code } = req.body;
   if (!code) return reply.status(400).send({ error: "code is required" });
 
-  const container = loginContainers.get(tenantId);
-  if (!container) return reply.status(404).send({ error: "no active login session for this tenant" });
+  if (!loginContainers.has(tenantId)) {
+    return reply.status(404).send({ error: "no active login session. Click Connect first." });
+  }
+
+  const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
 
   try {
-    // Attach to container stdin and send the code
-    const attachStream = await container.attach({ stream: true, stdin: true, hijack: true });
-    attachStream.write(code + "\n");
-    attachStream.end();
+    // Step 2: Run a NEW container that pipes the code into claude auth login
+    // This container saves credentials to the tenant's claude-auth directory
+    const safeCode = code.replace(/'/g, "'\\''");
+    const authContainer = await docker.createContainer({
+      Image: SESSION_IMAGE,
+      Cmd: ["sh", "-c", `
+        mkdir -p /data/tenants/${tenantId}/claude-auth &&
+        rm -f /root/.claude && ln -s /data/tenants/${tenantId}/claude-auth /root/.claude &&
+        echo '${safeCode}' | claude auth login
+      `],
+      Env: [`HOME=/root`],
+      HostConfig: {
+        Mounts: [
+          { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
+        ],
+      },
+      Labels: { "vibeweb.role": "auth-login-code", "vibeweb.tenant": tenantId },
+      Tty: false,
+    });
 
-    // Wait for container to finish (auth completes)
+    await authContainer.start();
+
+    // Wait for it to complete
     await Promise.race([
-      container.wait(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000)),
+      authContainer.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 60000)),
     ]);
 
-    await container.remove().catch(() => {});
+    // Check logs for success/failure
+    const logs = (await authContainer.logs({ stdout: true, stderr: true })).toString();
+    await authContainer.remove().catch(() => {});
     loginContainers.delete(tenantId);
 
-    // Check if credentials were saved
     const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
     const hasCredentials = checkCredentials(claudeAuthDir);
+
+    app.log.info(`Auth result for ${tenantId}: credentials=${hasCredentials}, logs=${logs.substring(0, 200)}`);
 
     return { success: hasCredentials };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to submit code";
+    loginContainers.delete(tenantId);
     return reply.status(500).send({ error: message });
   }
 });
