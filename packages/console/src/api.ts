@@ -29,3 +29,17 @@ export async function queryDb(tenantId: string, sql: string) {
   return res.json();
 }
 export async function getOAuthStatus(tenantId: string) { const res = await apiFetch(`/tenants/${tenantId}/auth/claude/status`); return res.json(); }
+
+export async function startClaudeLogin() {
+  const res = await fetch("/agent-api/auth/claude/login", { method: "POST" });
+  return res.json();
+}
+
+export async function getClaudeAuthStatus() {
+  const res = await fetch("/agent-api/auth/claude/status");
+  return res.json();
+}
+
+export async function disconnectClaude() {
+  return fetch("/agent-api/auth/claude", { method: "DELETE" });
+}

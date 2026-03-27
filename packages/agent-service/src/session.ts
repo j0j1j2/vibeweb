@@ -8,7 +8,7 @@ export interface CreateSessionOpts {
   tenantId: string;
   sessionId: string;
   claudeMdContent: string;
-  authToken: string;
+  authToken: string | null;
 }
 
 export interface SessionInfo {
@@ -35,16 +35,24 @@ export class SessionManager {
     const previewDir = path.join(this.tenantsDir, tenantId, "preview");
     const dbDir = path.join(this.tenantsDir, tenantId, "db");
 
+    const env = [
+      `BRIDGE_PORT=${SESSION_BRIDGE_PORT}`,
+      `WORKSPACE=/workspace`,
+    ];
+    if (authToken) {
+      env.push(`ANTHROPIC_API_KEY=${authToken}`);
+    }
+
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
-      Env: [
-        `ANTHROPIC_API_KEY=${authToken}`,
-        `BRIDGE_PORT=${SESSION_BRIDGE_PORT}`,
-        `WORKSPACE=/workspace`,
-      ],
+      Env: env,
       ExposedPorts: { [`${SESSION_BRIDGE_PORT}/tcp`]: {} },
       HostConfig: {
-        Binds: [`${previewDir}:/workspace:rw`, `${dbDir}:/data/db:rw`],
+        Binds: [
+          `${previewDir}:/workspace:rw`,
+          `${dbDir}:/data/db:rw`,
+          `${path.join(this.tenantsDir, "..", "claude-auth")}:/root/.claude:ro`,
+        ],
         PortBindings: { [`${SESSION_BRIDGE_PORT}/tcp`]: [{ HostPort: "0" }] },
         Memory: parseMemoryLimit(SESSION_MEMORY_LIMIT),
         NanoCpus: SESSION_CPU_LIMIT * 1e9,
