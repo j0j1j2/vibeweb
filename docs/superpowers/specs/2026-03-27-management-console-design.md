@@ -52,17 +52,18 @@ console.vibeweb.localhost
 
 ## Pages & Routes
 
-| Route | Page | Auth | Description |
-|-------|------|------|-------------|
-| `/login` | LoginPage | None | API key input → authenticate |
-| `/admin` | AdminPage | Admin | Tenant list, create/delete, per-tenant Claude connection |
-| `/t/:tenantId/chat` | ChatPage | Tenant | Vibe editor: tabbed main area + chat panel |
-| `/t/:tenantId/api` | ApiPage | Tenant | Serverless function list |
-| `/t/:tenantId/settings` | SettingsPage | Tenant | Deploy, subdomain info |
+| Route | Page | Chat Panel | Description |
+|-------|------|------------|-------------|
+| `/login` | LoginPage | No | API key input → authenticate |
+| `/admin` | AdminPage | No | Tenant list, create/delete, per-tenant Claude connection |
+| `/t/:tenantId/preview` | PreviewPage | Yes | Live preview iframe |
+| `/t/:tenantId/view` | ViewPage | Yes | Frontend page management — list HTML pages, preview selected |
+| `/t/:tenantId/files` | FilesPage | Yes | File tree + code viewer |
+| `/t/:tenantId/db` | DbPage | Yes | SQL query explorer |
+| `/t/:tenantId/api` | ApiPage | Yes | Serverless function list |
+| `/t/:tenantId/settings` | SettingsPage | No | Deploy, subdomain info |
 
-**Removed pages** (functionality moved to Chat page tabs):
-- ~~`/t/:tenantId/files`~~ → Files tab in ChatPage
-- ~~`/t/:tenantId/db`~~ → Database tab in ChatPage
+**Chat panel** (380px, right side) appears on all tenant pages except Settings. A shared `ChatLayout` wrapper manages the WebSocket session and renders the chat panel alongside the page content. The session persists across page navigation within the same tenant.
 
 ## Authentication
 
@@ -95,13 +96,16 @@ API key-based authentication using existing tenant `api_key` field.
 ▾ Platform         (admin only)
   Dashboard
 ▾ alice           (current tenant, expanded)
-  💬 Chat
+  🖥️ Preview
+  🎨 View
+  📁 Files
+  🗄️ Database
   🔌 API
   ⚙️ Settings
 ▸ bob             (admin only, collapsed)
 ```
 
-Note: Files and Database are accessed via tabs in the Chat page, not as separate sidebar items.
+Each page (except Settings) has a shared chat panel on the right for vibe editing.
 
 ## Page Details
 
@@ -123,42 +127,40 @@ Note: Files and Database are accessed via tabs in the Chat page, not as separate
 **Create tenant:**
 - "New Tenant" button → inline form with subdomain + name inputs
 
-### ChatPage (`/t/:tenantId/chat`)
+### PreviewPage (`/t/:tenantId/preview`)
 
-Split layout: tabbed main area (left, flex) + chat panel (right, fixed 380px).
+Full-screen iframe preview of the tenant site (`{subdomain}.vibeweb.localhost?preview=true`). URL bar with refresh + external link buttons. Auto-refreshes via Preview Server's live reload. Chat panel on right for making changes.
 
-**Tabbed main area (left):**
-- **Preview** (default): iframe loading `{subdomain}.vibeweb.localhost?preview=true`. Auto-refreshes via Preview Server's existing WebSocket live reload. URL bar with refresh + external link buttons.
-- **Files**: read-only file tree with folder expand/collapse + code viewer.
-- **DB**: SQL query textarea (Ctrl+Enter to run) + result table.
+### ViewPage (`/t/:tenantId/view`)
 
-**Chat panel (right):**
-- Message list with avatar icons (User/Bot)
-- Claude responses streamed in real-time with typing indicator
-- Tool use indicators shown as inline badges (wrench icon)
-- Input area: textarea + send button, Ctrl+Enter to send
-- Connection status indicator (green dot when connected)
+Frontend page management. Left sidebar lists all HTML pages from `public/`. Selecting a page shows its preview in the main area. Chat panel on right for editing the selected page visually.
 
-**WebSocket connection:**
-1. On page load, connect to Agent Service WebSocket via `/ws/agent`
-2. Send `session.start` with tenantId
-3. Wait for `session.ready`
-4. User types message → send `message` with content
-5. Receive `stream` events → append to current Claude message
-6. Receive `message.done` → mark message complete
-7. On page leave, send `session.end`
+### FilesPage (`/t/:tenantId/files`)
+
+Split layout: file tree (left 240px) + code viewer (right). Read-only display with syntax highlighting. Chat panel on right for making file changes.
+
+### DbPage (`/t/:tenantId/db`)
+
+SQL query textarea (Ctrl+Enter to run) + result table. Only SELECT/PRAGMA queries allowed. Chat panel on right for database operations.
 
 ### ApiPage (`/t/:tenantId/api`)
 
-- Lists serverless functions from `functions/api/*.js`
-- Table: function name, endpoint path
+Lists serverless functions from `functions/api/*.js`. Table: function name, endpoint path. Chat panel on right for creating/editing functions.
 
 ### SettingsPage (`/t/:tenantId/settings`)
 
 - **Subdomain:** Display current subdomain (read-only)
 - **Deploy:** Button to deploy preview → public. Shows last deployment date.
+- No chat panel. Claude connection managed from Admin Dashboard.
 
-Note: Claude connection is managed from Admin Dashboard, not from tenant Settings.
+### Shared Chat Panel (ChatLayout)
+
+All pages except Settings are wrapped in `ChatLayout`, which:
+1. Establishes a WebSocket connection to Agent Service (`/ws/agent`)
+2. Sends `session.start` with tenantId on mount
+3. Renders the chat panel (380px right) alongside page content
+4. Provides `ChatContext` with subdomain and connection state
+5. Sends `session.end` on unmount
 
 ## API Endpoints
 
@@ -218,17 +220,21 @@ packages/console/
     ├── components/
     │   ├── ui/              # shadcn/ui components (button, input, dialog, etc.)
     │   ├── Sidebar.tsx      # Tree sidebar (Platform + Sites sections)
+    │   ├── ChatLayout.tsx   # Shared WebSocket session + chat panel wrapper
     │   ├── ChatPanel.tsx    # Chat messages + input (right panel)
     │   ├── PreviewFrame.tsx # iframe live preview with URL bar
     │   ├── FileTree.tsx     # Hierarchical file tree
     │   ├── FileViewer.tsx   # Read-only code viewer
     │   └── DbExplorer.tsx   # SQL input + result table
     └── pages/
-        ├── LoginPage.tsx    # API key login with gradient button
+        ├── LoginPage.tsx    # API key login
         ├── AdminPage.tsx    # Tenant table + inline Claude auth per tenant
-        ├── ChatPage.tsx     # Tabbed main area + chat panel
-        ├── ApiPage.tsx      # Serverless function list
-        └── SettingsPage.tsx # Subdomain + deploy
+        ├── PreviewPage.tsx  # Live preview + chat
+        ├── ViewPage.tsx     # Frontend page management + chat
+        ├── FilesPage.tsx    # File explorer + chat
+        ├── DbPage.tsx       # SQL explorer + chat
+        ├── ApiPage.tsx      # Function list + chat
+        └── SettingsPage.tsx # Subdomain + deploy (no chat)
 
 configs/
 └── console-nginx.conf      # Nginx: SPA fallback + /api + /agent-api + /ws proxies

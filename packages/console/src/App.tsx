@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/auth";
 import { Sidebar } from "@/components/Sidebar";
+import { ChatLayout } from "@/components/ChatLayout";
 import { LoginPage } from "@/pages/LoginPage";
 import { AdminPage } from "@/pages/AdminPage";
-import { ChatPage } from "@/pages/ChatPage";
+import { PreviewPage } from "@/pages/PreviewPage";
+import { ViewPage } from "@/pages/ViewPage";
 import { FilesPage } from "@/pages/FilesPage";
 import { DbPage } from "@/pages/DbPage";
 import { ApiPage } from "@/pages/ApiPage";
@@ -39,11 +41,19 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<AppLayout />}>
             <Route path="/admin" element={<AdminPage />} />
-            <Route path="/t/:tenantId/chat" element={<ChatPage />} />
-            <Route path="/t/:tenantId/files" element={<FilesPage />} />
-            <Route path="/t/:tenantId/db" element={<DbPage />} />
-            <Route path="/t/:tenantId/api" element={<ApiPage />} />
+
+            {/* Pages with chat panel */}
+            <Route path="/t/:tenantId/preview" element={<ChatLayout><PreviewPage /></ChatLayout>} />
+            <Route path="/t/:tenantId/view" element={<ChatLayout><ViewPage /></ChatLayout>} />
+            <Route path="/t/:tenantId/files" element={<ChatLayout><FilesPage /></ChatLayout>} />
+            <Route path="/t/:tenantId/db" element={<ChatLayout><DbPage /></ChatLayout>} />
+            <Route path="/t/:tenantId/api" element={<ChatLayout><ApiPage /></ChatLayout>} />
+
+            {/* Pages without chat panel */}
             <Route path="/t/:tenantId/settings" element={<SettingsPage />} />
+
+            {/* Legacy redirect */}
+            <Route path="/t/:tenantId/chat" element={<Navigate to="../preview" replace />} />
             <Route path="*" element={<Navigate to="/login" />} />
           </Route>
         </Routes>
