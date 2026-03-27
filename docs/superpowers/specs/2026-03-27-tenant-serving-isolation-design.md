@@ -41,7 +41,8 @@ Filesystem ← /data/tenants/{tenant-id}/
 ### 1. Traefik Gateway
 
 - Wildcard matching on `*.vibeweb.localhost`
-- Extracts subdomain from Host header, injects as `X-Tenant-Id` header
+- Extracts subdomain from Host header
+- ForwardAuth resolves subdomain → tenant UUID, injects as `X-Tenant-Id` header (UUID, not subdomain string)
 - Routes by path:
   - `/api/*` → Function Runner
   - `/ws` → Preview Server
@@ -49,7 +50,7 @@ Filesystem ← /data/tenants/{tenant-id}/
   - Everything else → Nginx (Site Server)
 - ForwardAuth middleware delegates tenant validation to Control API
 - Unregistered subdomains get 404
-- `vibeweb.localhost` (no subdomain) → Control API
+- `vibeweb.localhost` (no subdomain) → Control API (port 1919)
 
 ### 2. Site Server (Nginx)
 
@@ -69,6 +70,7 @@ Filesystem ← /data/tenants/{tenant-id}/
 3. Creates isolated container:
    - Base image: `vibeweb-runner:node20` (pre-built lightweight image)
    - Mounts `/data/tenants/{id}/functions/` → `/app` (read-only)
+   - Mounts `/data/tenants/{id}/db/` → `/data/db` (read-write, tenant's own SQLite DB)
    - Passes request info via environment variables
 4. Container executes function, returns response via stdout
 5. 10-second timeout, then force kill
@@ -79,7 +81,7 @@ Filesystem ← /data/tenants/{tenant-id}/
 - CPU: 0.5 cores
 - Timeout: 10 seconds
 - Network: no external outbound access
-- Filesystem: tenant functions/ read-only mount only
+- Filesystem: tenant functions/ read-only mount, tenant db/ read-write mount
 
 **Function signature:**
 ```js
@@ -90,6 +92,24 @@ export default async function(req) {
     headers: { "content-type": "application/json" },
     body: { message: "Hello!" }
   };
+}
+```
+
+**Tenant DB access from functions:**
+Each tenant gets a SQLite database at `/data/db/tenant.db` inside the function container. Functions can use `better-sqlite3` (bundled in runner image) to read/write:
+```js
+// /api/notes.js
+import Database from "better-sqlite3";
+const db = new Database("/data/db/tenant.db");
+
+export default async function(req) {
+  if (req.method === "POST") {
+    const { title, content } = JSON.parse(req.body);
+    db.prepare("INSERT INTO notes (title, content) VALUES (?, ?)").run(title, content);
+    return { status: 201, body: { ok: true } };
+  }
+  const notes = db.prepare("SELECT * FROM notes").all();
+  return { status: 200, body: notes };
 }
 ```
 
@@ -177,6 +197,8 @@ CREATE TABLE deployments (
       ├── preview/          # Draft changes (not yet deployed)
       │   ├── public/
       │   └── functions/
+      ├── db/                # Tenant's own SQLite database(s)
+      │   └── tenant.db     # default DB, accessible from serverless functions
       └── metadata.json     # Tenant config
 ```
 
@@ -185,7 +207,7 @@ CREATE TABLE deployments (
 | Layer | Static Serving | Function Execution |
 |-------|---------------|-------------------|
 | Process | Shared Nginx | Per-request container |
-| Filesystem | Nginx reads only tenant's `public/` via header | Read-only mount of tenant's `functions/` only |
+| Filesystem | Nginx reads only tenant's `public/` via header | Read-only mount of `functions/`, read-write mount of `db/` |
 | Network | N/A (no execution) | No external outbound |
 | Resources | N/A | 128MB RAM, 0.5 CPU, 10s timeout |
 | Path traversal | Nginx config blocks `..` | Container has no access to host FS |
@@ -231,7 +253,7 @@ vibeweb/
 
 1. **traefik** — Reverse proxy, port 80
 2. **nginx** — Static file serving
-3. **control-api** — Tenant management API
+3. **control-api** — Tenant management API, port 1919
 4. **function-runner** — Docker socket mounted, spawns function containers
 5. **preview-server** — WebSocket, file watching
 
