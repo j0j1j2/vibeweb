@@ -33,3 +33,22 @@ export interface FunctionResponse {
   headers: Record<string, string>;
   body: unknown;
 }
+
+export interface Session {
+  id: string;
+  tenant_id: string;
+  container_id: string;
+  status: "active" | "closed" | "timed_out";
+  started_at: string;
+  ended_at: string | null;
+  last_activity_at: string;
+}
+
+export interface WsMessage {
+  type: string;
+  sessionId?: string;
+  tenantId?: string;
+  content?: string;
+  data?: unknown;
+  error?: string;
+}

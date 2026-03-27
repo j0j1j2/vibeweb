@@ -15,3 +15,10 @@ export const RUNNER_IMAGE = "vibeweb-runner:node20";
 
 export const SUBDOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 export const SUBDOMAIN_MAX_LENGTH = 63;
+
+export const AGENT_SERVICE_PORT = 3003;
+export const SESSION_IMAGE = "vibeweb-session:latest";
+export const SESSION_BRIDGE_PORT = 3100;
+export const SESSION_MEMORY_LIMIT = "512m";
+export const SESSION_CPU_LIMIT = 1;
+export const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
