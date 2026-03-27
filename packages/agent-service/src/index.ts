@@ -25,31 +25,46 @@ const proxies = new Map<string, SessionProxy>();
 
 app.get("/health", async () => ({ status: "ok" }));
 
-// POST /auth/claude/login - Start claude login flow
-app.post("/auth/claude/login", async (req, reply) => {
-  const claudeAuthDir = path.join(DATA_DIR, "claude-auth");
+// Track active login containers per tenant
+const loginContainers = new Map<string, Docker.Container>();
+
+// POST /auth/claude/:tenantId/login - Start claude login flow for a tenant
+app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async (req, reply) => {
+  const { tenantId } = req.params;
+  // Ensure tenant claude-auth dir exists (inside the volume)
+  const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
   fs.mkdirSync(claudeAuthDir, { recursive: true });
 
+  const prev = loginContainers.get(tenantId);
+  if (prev) {
+    try { await prev.stop(); await prev.remove(); } catch {}
+    loginContainers.delete(tenantId);
+  }
+
+  const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
+
   try {
-    // Run claude auth login in a temp session container using named volume
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
-      Cmd: ["claude", "auth", "login"],
+      Cmd: ["sh", "-c", `
+        mkdir -p /data/tenants/${tenantId}/claude-auth &&
+        ln -s /data/tenants/${tenantId}/claude-auth /root/.claude &&
+        exec claude auth login
+      `],
       Env: [`HOME=/root`],
       HostConfig: {
-        Mounts: [{
-          Type: "volume",
-          Source: "vibeweb_claude-auth",
-          Target: "/root/.claude",
-          ReadOnly: false,
-        }],
+        Mounts: [
+          { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
+        ],
       },
-      Labels: { "vibeweb.role": "auth-login" },
+      Labels: { "vibeweb.role": "auth-login", "vibeweb.tenant": tenantId },
       Tty: false,
-      OpenStdin: false,
+      OpenStdin: true,
+      AttachStdin: true,
     });
 
     await container.start();
+    loginContainers.set(tenantId, container);
 
     // Capture output to find the OAuth URL
     const stream = await container.logs({ follow: true, stdout: true, stderr: true });
@@ -61,10 +76,8 @@ app.post("/auth/claude/login", async (req, reply) => {
       }, 30000);
 
       stream.on("data", (chunk: Buffer) => {
-        // Strip Docker stream header (8 bytes per frame when Tty=false)
         const raw = chunk.toString();
         output += raw;
-        // Match URL — strip any ANSI escape codes first
         const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n\r]/g, "");
         const urlMatch = clean.match(/(https:\/\/claude\.com\/[^\s]+)/);
         if (urlMatch) {
@@ -79,11 +92,13 @@ app.post("/auth/claude/login", async (req, reply) => {
       });
     });
 
-    // Wait for auth to complete in background (container will exit when done)
-    container.wait().then(() => {
-      container.remove().catch(() => {});
-      app.log.info("Claude login container completed");
-    }).catch(() => {});
+    // Auto-cleanup after 5 minutes
+    setTimeout(async () => {
+      if (loginContainers.get(tenantId) === container) {
+        try { await container.stop(); await container.remove(); } catch {}
+        loginContainers.delete(tenantId);
+      }
+    }, 300_000);
 
     return { url };
   } catch (err) {
@@ -92,34 +107,61 @@ app.post("/auth/claude/login", async (req, reply) => {
   }
 });
 
-// GET /auth/claude/status - Check if credentials exist
-app.get("/auth/claude/status", async () => {
-  const claudeAuthDir = path.join(DATA_DIR, "claude-auth");
-  // Check for credential files that claude login creates
-  const hasCredentials = fs.existsSync(claudeAuthDir) && (
-    fs.existsSync(path.join(claudeAuthDir, "credentials.json")) ||
-    fs.existsSync(path.join(claudeAuthDir, ".credentials.json")) ||
-    fs.readdirSync(claudeAuthDir).some(f => f.includes("credential") || f.includes("auth"))
-  );
+// POST /auth/claude/:tenantId/code - Submit the OAuth authorization code
+app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude/:tenantId/code", async (req, reply) => {
+  const { tenantId } = req.params;
+  const { code } = req.body;
+  if (!code) return reply.status(400).send({ error: "code is required" });
 
-  // List files for debugging
-  let files: string[] = [];
-  if (fs.existsSync(claudeAuthDir)) {
-    files = fs.readdirSync(claudeAuthDir);
+  const container = loginContainers.get(tenantId);
+  if (!container) return reply.status(404).send({ error: "no active login session for this tenant" });
+
+  try {
+    // Attach to container stdin and send the code
+    const attachStream = await container.attach({ stream: true, stdin: true, hijack: true });
+    attachStream.write(code + "\n");
+    attachStream.end();
+
+    // Wait for container to finish (auth completes)
+    await Promise.race([
+      container.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000)),
+    ]);
+
+    await container.remove().catch(() => {});
+    loginContainers.delete(tenantId);
+
+    // Check if credentials were saved
+    const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
+    const hasCredentials = checkCredentials(claudeAuthDir);
+
+    return { success: hasCredentials };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to submit code";
+    return reply.status(500).send({ error: message });
   }
-
-  return { connected: hasCredentials, files };
 });
 
-// DELETE /auth/claude - Remove credentials
-app.delete("/auth/claude", async (req, reply) => {
-  const claudeAuthDir = path.join(DATA_DIR, "claude-auth");
+// GET /auth/claude/:tenantId/status - Check if tenant has credentials
+app.get<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/status", async (req) => {
+  const claudeAuthDir = path.join(tenantsDir, req.params.tenantId, "claude-auth");
+  return { connected: checkCredentials(claudeAuthDir) };
+});
+
+// DELETE /auth/claude/:tenantId - Remove tenant credentials
+app.delete<{ Params: { tenantId: string } }>("/auth/claude/:tenantId", async (req, reply) => {
+  const claudeAuthDir = path.join(tenantsDir, req.params.tenantId, "claude-auth");
   if (fs.existsSync(claudeAuthDir)) {
     fs.rmSync(claudeAuthDir, { recursive: true, force: true });
-    fs.mkdirSync(claudeAuthDir, { recursive: true });
   }
   return reply.status(204).send();
 });
+
+function checkCredentials(dir: string): boolean {
+  if (!fs.existsSync(dir)) return false;
+  const files = fs.readdirSync(dir);
+  return files.some(f => f.includes("credential") || f.includes("auth") || f.endsWith(".json"));
+}
 
 const start = async () => {
   await sessionManager.cleanupOrphanContainers();
@@ -195,6 +237,8 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string): Promise<
 
   const previewDir = path.join(tenantsDir, tenantId, "preview");
   const dbDir = path.join(tenantsDir, tenantId, "db");
+  fs.mkdirSync(previewDir, { recursive: true });
+  fs.mkdirSync(dbDir, { recursive: true });
   const claudeMd = generateClaudeMd(tenantId, previewDir, dbDir);
 
   // Write CLAUDE.md to preview dir
@@ -239,9 +283,9 @@ async function handleSessionEnd(sessionId: string, userWs: WebSocket): Promise<v
 }
 
 function resolveAuthToken(tenantId: string): string | null {
-  // Check if claude-auth credentials exist (from claude login)
-  const claudeAuthDir = path.join(DATA_DIR, "claude-auth");
-  if (fs.existsSync(claudeAuthDir) && fs.readdirSync(claudeAuthDir).length > 0) {
+  // Check if tenant has claude-auth credentials (from claude login)
+  const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
+  if (checkCredentials(claudeAuthDir)) {
     return ""; // Empty string = use mounted credentials instead of API key
   }
   // Fallback to API key

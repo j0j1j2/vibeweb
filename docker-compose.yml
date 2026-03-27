@@ -23,6 +23,7 @@ services:
       dockerfile: packages/control-api/Dockerfile
     environment:
       - DATA_DIR=/data
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-vibeweb-admin-secret}
     ports:
       - "1919:1919"
     volumes:
@@ -59,7 +60,6 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       - tenant-data:/data/tenants
-      - claude-auth:/data/claude-auth
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "3003:3003"
@@ -77,6 +77,4 @@ volumes:
   app-data:
     driver: local
   tenant-data:
-    driver: local
-  claude-auth:
     driver: local

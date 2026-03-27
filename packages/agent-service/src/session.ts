@@ -32,9 +32,6 @@ export class SessionManager {
       throw new Error(`Tenant ${tenantId} already has an active session`);
     }
 
-    const previewDir = path.join(this.tenantsDir, tenantId, "preview");
-    const dbDir = path.join(this.tenantsDir, tenantId, "db");
-
     const env = [
       `BRIDGE_PORT=${SESSION_BRIDGE_PORT}`,
       `WORKSPACE=/workspace`,
@@ -43,25 +40,30 @@ export class SessionManager {
       env.push(`ANTHROPIC_API_KEY=${authToken}`);
     }
 
+    // Use Docker named volume — bind mounts from container paths don't work in DinD
+    const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
+
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
-      Env: env,
+      Env: [
+        ...env,
+        `WORKSPACE=/data/tenants/${tenantId}/preview`,
+      ],
       ExposedPorts: { [`${SESSION_BRIDGE_PORT}/tcp`]: {} },
       HostConfig: {
-        Binds: [
-          `${previewDir}:/workspace:rw`,
-          `${dbDir}:/data/db:rw`,
+        Mounts: [
+          { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
         ],
-        Mounts: [{
-          Type: "volume" as const,
-          Source: "vibeweb_claude-auth",
-          Target: "/root/.claude",
-          ReadOnly: true,
-        }],
         PortBindings: { [`${SESSION_BRIDGE_PORT}/tcp`]: [{ HostPort: "0" }] },
         Memory: parseMemoryLimit(SESSION_MEMORY_LIMIT),
         NanoCpus: SESSION_CPU_LIMIT * 1e9,
       },
+      // Set up claude credentials from tenant dir, then start bridge
+      Cmd: ["sh", "-c", `
+        mkdir -p /root/.claude /data/tenants/${tenantId}/claude-auth &&
+        cp -a /data/tenants/${tenantId}/claude-auth/. /root/.claude/ 2>/dev/null;
+        exec node /opt/bridge/bridge.js
+      `],
       Labels: {
         "vibeweb.role": "agent-session",
         "vibeweb.tenant": tenantId,
