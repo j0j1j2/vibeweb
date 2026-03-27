@@ -1,0 +1,53 @@
+services:
+  traefik:
+    image: traefik:v3.0
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - ./configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./configs/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    depends_on:
+      control-api:
+        condition: service_started
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - tenant-data:/data/tenants:ro
+
+  control-api:
+    build:
+      context: packages/control-api
+    environment:
+      - DATA_DIR=/data
+    ports:
+      - "1919:1919"
+    volumes:
+      - app-data:/data
+
+  function-runner:
+    build:
+      context: packages/function-runner
+    environment:
+      - DATA_DIR=/data
+    volumes:
+      - tenant-data:/data/tenants:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - control-api
+
+  preview-server:
+    build:
+      context: packages/preview-server
+    environment:
+      - DATA_DIR=/data
+    volumes:
+      - tenant-data:/data/tenants
+
+volumes:
+  app-data:
+    driver: local
+  tenant-data:
+    driver: local
