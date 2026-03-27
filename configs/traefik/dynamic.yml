@@ -1,0 +1,69 @@
+http:
+  middlewares:
+    tenant-auth:
+      forwardAuth:
+        address: "http://control-api:1919/auth/validate"
+        authResponseHeaders:
+          - "X-Tenant-Id"
+
+  routers:
+    control-api:
+      rule: "Host(`vibeweb.localhost`)"
+      service: control-api
+      entryPoints:
+        - web
+
+    function-runner:
+      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`) && PathPrefix(`/api/`)"
+      service: function-runner
+      entryPoints:
+        - web
+      middlewares:
+        - tenant-auth
+
+    preview-ws:
+      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`) && PathPrefix(`/ws`)"
+      service: preview-server
+      entryPoints:
+        - web
+      middlewares:
+        - tenant-auth
+
+    preview-static:
+      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`) && Query(`preview=true`)"
+      service: preview-server
+      entryPoints:
+        - web
+      middlewares:
+        - tenant-auth
+      priority: 100
+
+    site-server:
+      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`)"
+      service: site-server
+      entryPoints:
+        - web
+      middlewares:
+        - tenant-auth
+      priority: 1
+
+  services:
+    control-api:
+      loadBalancer:
+        servers:
+          - url: "http://control-api:1919"
+
+    function-runner:
+      loadBalancer:
+        servers:
+          - url: "http://function-runner:3001"
+
+    preview-server:
+      loadBalancer:
+        servers:
+          - url: "http://preview-server:3002"
+
+    site-server:
+      loadBalancer:
+        servers:
+          - url: "http://nginx:80"
