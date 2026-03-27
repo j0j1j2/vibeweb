@@ -38,6 +38,15 @@ http:
         - tenant-auth
       priority: 100
 
+    agent-ws:
+      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`) && PathPrefix(`/agent`)"
+      service: agent-service
+      entryPoints:
+        - web
+      middlewares:
+        - tenant-auth
+      priority: 90
+
     site-server:
       rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`)"
       service: site-server
@@ -62,6 +71,11 @@ http:
       loadBalancer:
         servers:
           - url: "http://preview-server:3002"
+
+    agent-service:
+      loadBalancer:
+        servers:
+          - url: "http://agent-service:3003"
 
     site-server:
       loadBalancer:

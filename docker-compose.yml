@@ -49,6 +49,22 @@ services:
     volumes:
       - tenant-data:/data/tenants
 
+  agent-service:
+    build:
+      context: .
+      dockerfile: packages/agent-service/Dockerfile
+    environment:
+      - DATA_DIR=/data
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - tenant-data:/data/tenants
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "3003:3003"
+    depends_on:
+      - control-api
+
 volumes:
   app-data:
     driver: local
