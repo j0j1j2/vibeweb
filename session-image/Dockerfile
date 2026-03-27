@@ -7,6 +7,10 @@ RUN npm install -g @anthropic-ai/claude-code
 WORKDIR /opt/libs
 RUN npm install better-sqlite3@11
 
+# Bridge server dependencies
+WORKDIR /opt/bridge
+RUN npm install ws
+
 # Bridge server
 COPY bridge.js /opt/bridge/bridge.js
 
