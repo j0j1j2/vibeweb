@@ -44,13 +44,13 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
   const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
 
   try {
-    // Create container with Tty + stdin for interactive claude auth login
+    // Use setup-token: it shows OAuth URL + "Paste code here" prompt on stdin
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
       Cmd: ["sh", "-c", `
         mkdir -p /data/tenants/${tenantId}/claude-auth &&
         rm -f /root/.claude && ln -s /data/tenants/${tenantId}/claude-auth /root/.claude &&
-        claude auth login
+        claude setup-token
       `],
       Env: [`HOME=/root`],
       HostConfig: {
@@ -72,7 +72,7 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
     // Capture output to find the OAuth URL
     const url = await new Promise<string>((resolve, reject) => {
       let output = "";
-      const timeout = setTimeout(() => reject(new Error("Timeout. Output: " + output.substring(0, 500))), 15000);
+      const timeout = setTimeout(() => reject(new Error("Timeout. Output: " + output.substring(0, 500))), 30000);
       stream.on("data", (chunk: Buffer) => {
         output += chunk.toString();
         const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n\r]/g, "");
