@@ -14,6 +14,10 @@ RUN npm install ws
 # Bridge server
 COPY bridge.js /opt/bridge/bridge.js
 
+# Create non-root user (--dangerously-skip-permissions requires non-root)
+RUN useradd -m -s /bin/bash vibe && \
+    mkdir -p /workspace && chown vibe:vibe /workspace
+
 WORKDIR /workspace
 
 EXPOSE 3100

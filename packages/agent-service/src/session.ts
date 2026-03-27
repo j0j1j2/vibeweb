@@ -65,11 +65,12 @@ export class SessionManager {
         NanoCpus: SESSION_CPU_LIMIT * 1e9,
         NetworkMode: networkName,
       },
-      // Set up claude credentials from tenant dir, then start bridge
+      // Root sets up dirs/perms, then drops to 'vibe' user for claude
       Cmd: ["sh", "-c", `
-        mkdir -p /root/.claude /data/tenants/${tenantId}/claude-auth &&
-        cp -a /data/tenants/${tenantId}/claude-auth/. /root/.claude/ 2>/dev/null;
-        exec node /opt/bridge/bridge.js
+        mkdir -p /home/vibe/.claude /data/tenants/${tenantId}/claude-auth /data/tenants/${tenantId}/preview &&
+        cp -a /data/tenants/${tenantId}/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
+        chown -R vibe:vibe /home/vibe /data/tenants/${tenantId}/preview /data/tenants/${tenantId}/claude-auth 2>/dev/null;
+        exec su vibe -c "HOME=/home/vibe WORKSPACE=/data/tenants/${tenantId}/preview BRIDGE_PORT=${SESSION_BRIDGE_PORT} NODE_PATH=/opt/libs/node_modules CLAUDE_CODE_OAUTH_TOKEN=\${CLAUDE_CODE_OAUTH_TOKEN:-} ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY:-} node /opt/bridge/bridge.js"
       `],
       Labels: {
         "vibeweb.role": "agent-session",

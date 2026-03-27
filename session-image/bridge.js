@@ -51,7 +51,7 @@ function runClaude(prompt) {
     cwd: WORKSPACE,
     env: {
       ...process.env,
-      HOME: "/root",
+      HOME: process.env.HOME || "/home/vibe",
       NODE_PATH: "/opt/libs/node_modules",
     },
     stdio: ["pipe", "pipe", "pipe"],
