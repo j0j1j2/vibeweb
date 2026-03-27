@@ -118,24 +118,30 @@ app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude
   }
 
   try {
-    // Write the code to the container's stdin via the hijacked stream
-    entry.stream.write(code + "\n");
+    // Try sending the code via stdin (Tty mode needs \r)
+    entry.stream.write(code + "\r");
     app.log.info(`Sent auth code to login container for ${tenantId}`);
 
-    // Wait for container to exit (auth completes)
-    await Promise.race([
-      entry.container.wait(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000)),
+    // Wait for container to exit or credentials to appear (whichever first)
+    const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
+    const success = await Promise.race([
+      entry.container.wait().then(() => checkCredentials(claudeAuthDir)),
+      // Also poll for credentials (in case CLI auto-detects without stdin)
+      new Promise<boolean>((resolve) => {
+        const poll = setInterval(() => {
+          if (checkCredentials(claudeAuthDir)) { clearInterval(poll); resolve(true); }
+        }, 1000);
+        setTimeout(() => { clearInterval(poll); resolve(false); }, 30000);
+      }),
     ]);
 
-    loginContainers.delete(tenantId);
+    if (success) {
+      try { await entry.container.stop(); await entry.container.remove(); } catch {}
+      loginContainers.delete(tenantId);
+    }
 
-    // Check if credentials were saved
-    const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
-    const hasCredentials = checkCredentials(claudeAuthDir);
-    app.log.info(`Auth result for ${tenantId}: credentials=${hasCredentials}`);
-
-    return { success: hasCredentials };
+    app.log.info(`Auth result for ${tenantId}: credentials=${success}`);
+    return { success };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to submit code";
     loginContainers.delete(tenantId);
