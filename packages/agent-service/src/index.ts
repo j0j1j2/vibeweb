@@ -290,7 +290,8 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string): Promise<
 
 function handleUserMessage(sessionId: string, msg: WsMessage): void {
   const proxy = proxies.get(sessionId);
-  if (!proxy) return;
+  if (!proxy) { app.log.warn(`No proxy for session ${sessionId}`); return; }
+  app.log.info(`Forwarding message to bridge for session ${sessionId}: ${(msg.content ?? "").substring(0, 50)}`);
   proxy.sendToBridge({ type: "message", content: msg.content });
 }
 

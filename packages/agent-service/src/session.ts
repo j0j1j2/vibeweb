@@ -69,6 +69,7 @@ export class SessionManager {
       Cmd: ["sh", "-c", `
         mkdir -p /home/vibe/.claude /data/tenants/${tenantId}/claude-auth /data/tenants/${tenantId}/preview &&
         cp -a /data/tenants/${tenantId}/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
+        test -f /data/tenants/${tenantId}/claude-auth/.claude.json && cp /data/tenants/${tenantId}/claude-auth/.claude.json /home/vibe/.claude.json 2>/dev/null;
         chown -R vibe:vibe /home/vibe /data/tenants/${tenantId}/preview /data/tenants/${tenantId}/claude-auth 2>/dev/null;
         exec su vibe -c "HOME=/home/vibe WORKSPACE=/data/tenants/${tenantId}/preview BRIDGE_PORT=${SESSION_BRIDGE_PORT} NODE_PATH=/opt/libs/node_modules CLAUDE_CODE_OAUTH_TOKEN=\${CLAUDE_CODE_OAUTH_TOKEN:-} ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY:-} node /opt/bridge/bridge.js"
       `],

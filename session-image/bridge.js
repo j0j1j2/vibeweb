@@ -36,6 +36,7 @@ function runClaude(prompt) {
   const args = [
     "--print",
     "--output-format", "stream-json",
+    "--verbose",
     "--dangerously-skip-permissions",
   ];
 
@@ -46,6 +47,8 @@ function runClaude(prompt) {
   args.push(prompt);
 
   console.log(`Spawning claude with args: ${args.join(" ")}`);
+  console.log(`HOME=${process.env.HOME}, TOKEN=${(process.env.CLAUDE_CODE_OAUTH_TOKEN || "").substring(0, 20)}..., WORKSPACE=${WORKSPACE}`);
+  console.log(`claude.json exists: ${require("fs").existsSync((process.env.HOME || "/home/vibe") + "/.claude.json")}`);
 
   claudeProcess = spawn("claude", args, {
     cwd: WORKSPACE,
@@ -54,7 +57,7 @@ function runClaude(prompt) {
       HOME: process.env.HOME || "/home/vibe",
       NODE_PATH: "/opt/libs/node_modules",
     },
-    stdio: ["pipe", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   let buffer = "";
