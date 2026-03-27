@@ -4,7 +4,6 @@ import { File, Folder, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FileEntry { path: string; size: number; }
-
 interface TreeNode { name: string; path: string; children: TreeNode[]; isFile: boolean; size?: number; }
 
 function buildTree(files: FileEntry[]): TreeNode[] {
@@ -37,26 +36,41 @@ export function FileTree({ tenantId, onSelect, selectedPath }: { tenantId: strin
   const toggleExpand = (path: string) => { setExpanded((prev) => { const next = new Set(prev); if (next.has(path)) next.delete(path); else next.add(path); return next; }); };
 
   return (
-    <div className="p-2 text-sm overflow-y-auto h-full">
+    <div className="p-2 text-[13px] overflow-y-auto h-full">
       {tree.map((node) => <TreeItem key={node.path} node={node} expanded={expanded} toggleExpand={toggleExpand} onSelect={onSelect} selectedPath={selectedPath} depth={0} />)}
-      {files.length === 0 && <div className="text-zinc-400 text-center mt-8">No files</div>}
+      {files.length === 0 && <div className="text-white/20 text-center mt-12">No files</div>}
     </div>
   );
 }
 
-function TreeItem({ node, expanded, toggleExpand, onSelect, selectedPath, depth }: { node: TreeNode; expanded: Set<string>; toggleExpand: (path: string) => void; onSelect?: (path: string) => void; selectedPath?: string; depth: number; }) {
+function TreeItem({ node, expanded, toggleExpand, onSelect, selectedPath, depth }: {
+  node: TreeNode; expanded: Set<string>; toggleExpand: (path: string) => void; onSelect?: (path: string) => void; selectedPath?: string; depth: number;
+}) {
   const isExpanded = expanded.has(node.path);
   const isSelected = selectedPath === node.path;
 
   return (
     <div>
-      <button onClick={() => { if (node.isFile) onSelect?.(node.path); else toggleExpand(node.path); }}
-        className={cn("flex items-center gap-1.5 w-full px-2 py-1 rounded text-left hover:bg-zinc-100 dark:hover:bg-zinc-800", isSelected && "bg-zinc-200 dark:bg-zinc-700")}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}>
-        {node.isFile ? <File className="w-3.5 h-3.5 text-zinc-400" /> : isExpanded ? <><ChevronDown className="w-3 h-3" /><Folder className="w-3.5 h-3.5 text-zinc-400" /></> : <><ChevronRight className="w-3 h-3" /><Folder className="w-3.5 h-3.5 text-zinc-400" /></>}
+      <button
+        onClick={() => { if (node.isFile) onSelect?.(node.path); else toggleExpand(node.path); }}
+        className={cn(
+          "flex items-center gap-1.5 w-full px-2 py-1 rounded-md text-left transition-colors",
+          isSelected ? "bg-white/[0.08] text-white" : "text-white/50 hover:text-white/70 hover:bg-white/[0.04]"
+        )}
+        style={{ paddingLeft: `${depth * 14 + 8}px` }}
+      >
+        {node.isFile ? (
+          <File className="w-3.5 h-3.5 text-white/25" />
+        ) : isExpanded ? (
+          <><ChevronDown className="w-3 h-3 text-white/25" /><Folder className="w-3.5 h-3.5 text-violet-400/60" /></>
+        ) : (
+          <><ChevronRight className="w-3 h-3 text-white/25" /><Folder className="w-3.5 h-3.5 text-violet-400/60" /></>
+        )}
         <span className="truncate">{node.name}</span>
       </button>
-      {!node.isFile && isExpanded && node.children.map((child) => <TreeItem key={child.path} node={child} expanded={expanded} toggleExpand={toggleExpand} onSelect={onSelect} selectedPath={selectedPath} depth={depth + 1} />)}
+      {!node.isFile && isExpanded && node.children.map((child) => (
+        <TreeItem key={child.path} node={child} expanded={expanded} toggleExpand={toggleExpand} onSelect={onSelect} selectedPath={selectedPath} depth={depth + 1} />
+      ))}
     </div>
   );
 }

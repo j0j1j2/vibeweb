@@ -5,6 +5,7 @@ import { PreviewFrame } from "@/components/PreviewFrame";
 import { FileTree } from "@/components/FileTree";
 import { DbExplorer } from "@/components/DbExplorer";
 import { getTenant } from "@/api";
+import { Monitor, FolderOpen, Database } from "lucide-react";
 
 interface Message {
   role: "user" | "assistant";
@@ -12,6 +13,12 @@ interface Message {
   toolUse?: { tool: string; path?: string }[];
   done: boolean;
 }
+
+const tabs = [
+  { id: "preview" as const, label: "Preview", icon: Monitor },
+  { id: "files" as const, label: "Files", icon: FolderOpen },
+  { id: "db" as const, label: "Database", icon: Database },
+];
 
 export function ChatPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
@@ -83,23 +90,34 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full">
-      <div className="w-[35%] min-w-[300px]">
-        <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} />
-      </div>
-      <div className="flex-1 flex flex-col">
-        <div className="flex border-b">
-          {(["preview", "files", "db"] as const).map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium capitalize ${activeTab === tab ? "border-b-2 border-zinc-900 dark:border-zinc-100" : "text-zinc-500 hover:text-zinc-700"}`}>
-              {tab}
+      {/* Main area — tabs */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex items-center gap-1 px-3 py-2 border-b border-white/[0.06] bg-[#0f0f13]">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+                activeTab === id
+                  ? "bg-white/[0.08] text-white"
+                  : "text-white/35 hover:text-white/55 hover:bg-white/[0.04]"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
             </button>
           ))}
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden bg-[#111116]">
           {activeTab === "preview" && subdomain && <PreviewFrame subdomain={subdomain} />}
           {activeTab === "files" && tenantId && <FileTree tenantId={tenantId} />}
           {activeTab === "db" && tenantId && <DbExplorer tenantId={tenantId} />}
         </div>
+      </div>
+
+      {/* Chat panel — right side */}
+      <div className="w-[380px] flex-shrink-0">
+        <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} />
       </div>
     </div>
   );

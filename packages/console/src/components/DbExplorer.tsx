@@ -21,38 +21,46 @@ export function DbExplorer({ tenantId }: { tenantId: string }) {
     finally { setLoading(false); }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runQuery(); } };
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runQuery(); }
+  };
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
+      <div className="p-3 border-b border-white/[0.06]">
         <div className="flex gap-2">
-          <textarea value={sql} onChange={(e) => setSql(e.target.value)} onKeyDown={handleKeyDown}
-            className="flex-1 px-3 py-2 border rounded-md bg-transparent text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-zinc-400" rows={3} placeholder="SELECT * FROM ..." />
+          <textarea
+            value={sql}
+            onChange={(e) => setSql(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="flex-1 px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[13px] font-mono text-white/80 placeholder:text-white/20 resize-none focus:outline-none focus:border-violet-500/50 transition-colors"
+            rows={3}
+            placeholder="SELECT * FROM ..."
+          />
           <button onClick={runQuery} disabled={loading || !sql.trim()}
-            className="px-4 py-2 bg-zinc-900 text-white rounded-md hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 self-start"><Play className="w-4 h-4" /></button>
+            className="px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-500 disabled:opacity-30 self-end transition-colors">
+            <Play className="w-4 h-4" />
+          </button>
         </div>
-        {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
+        {error && <p className="mt-2 text-red-400 text-[13px]">{error}</p>}
       </div>
       <div className="flex-1 overflow-auto">
         {result && (
           <div>
-            <div className="px-4 py-2 text-xs text-zinc-400 border-b">{result.count} row{result.count !== 1 ? "s" : ""}</div>
-            <table className="w-full text-sm">
-              <thead className="bg-zinc-50 dark:bg-zinc-800 sticky top-0">
-                <tr>{result.columns.map((col) => <th key={col} className="text-left px-4 py-2 font-medium text-xs uppercase text-zinc-500">{col}</th>)}</tr>
-              </thead>
-              <tbody>
-                {result.rows.map((row, i) => (
-                  <tr key={i} className="border-t hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                    {result.columns.map((col) => <td key={col} className="px-4 py-2 font-mono text-xs">{String(row[col] ?? "NULL")}</td>)}
-                  </tr>
-                ))}
-              </tbody>
+            <div className="px-4 py-2 text-[11px] text-white/30 border-b border-white/[0.06]">{result.count} row{result.count !== 1 ? "s" : ""}</div>
+            <table className="w-full text-[13px]">
+              <thead><tr className="border-b border-white/[0.06]">
+                {result.columns.map((col) => <th key={col} className="text-left px-4 py-2.5 font-medium text-[11px] uppercase text-white/30 tracking-wider">{col}</th>)}
+              </tr></thead>
+              <tbody>{result.rows.map((row, i) => (
+                <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                  {result.columns.map((col) => <td key={col} className="px-4 py-2 font-mono text-[12px] text-white/60">{String(row[col] ?? "NULL")}</td>)}
+                </tr>
+              ))}</tbody>
             </table>
           </div>
         )}
-        {!result && !error && <div className="flex items-center justify-center h-full text-zinc-400 text-sm">Run a query to see results (Ctrl+Enter)</div>}
+        {!result && !error && <div className="flex items-center justify-center h-full text-white/20 text-sm">Run a query (Ctrl+Enter)</div>}
       </div>
     </div>
   );
