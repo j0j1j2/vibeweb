@@ -270,7 +270,7 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string): Promise<
   const session = await sessionManager.createSession({ tenantId, sessionId, claudeMdContent: claudeMd, authToken });
 
   // Connect to bridge with retry
-  const bridgeUrl = `ws://localhost:${session.bridgePort}`;
+  const bridgeUrl = `ws://${session.bridgeHost}:${session.bridgePort}`;
   const bridgeWs = await connectWithRetry(bridgeUrl, 10, 500);
 
   const proxy = new SessionProxy(sessionId, userWs, bridgeWs);

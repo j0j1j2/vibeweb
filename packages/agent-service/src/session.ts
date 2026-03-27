@@ -16,6 +16,7 @@ export interface SessionInfo {
   tenantId: string;
   containerId: string;
   bridgePort: number;
+  bridgeHost: string;
   startedAt: string;
 }
 
@@ -47,6 +48,7 @@ export class SessionManager {
 
     // Use Docker named volume — bind mounts from container paths don't work in DinD
     const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
+    const networkName = process.env.DOCKER_NETWORK ?? "vibeweb_default";
 
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
@@ -59,9 +61,9 @@ export class SessionManager {
         Mounts: [
           { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
         ],
-        PortBindings: { [`${SESSION_BRIDGE_PORT}/tcp`]: [{ HostPort: "0" }] },
         Memory: parseMemoryLimit(SESSION_MEMORY_LIMIT),
         NanoCpus: SESSION_CPU_LIMIT * 1e9,
+        NetworkMode: networkName,
       },
       // Set up claude credentials from tenant dir, then start bridge
       Cmd: ["sh", "-c", `
@@ -78,10 +80,12 @@ export class SessionManager {
 
     await container.start();
     const info = await container.inspect();
-    const portBindings = info.NetworkSettings.Ports[`${SESSION_BRIDGE_PORT}/tcp`];
-    const bridgePort = parseInt(portBindings[0].HostPort, 10);
+    // Get container IP on the shared network
+    const networks = info.NetworkSettings.Networks;
+    const containerIp = networks[networkName]?.IPAddress ?? Object.values(networks)[0]?.IPAddress ?? "localhost";
+    const bridgePort = SESSION_BRIDGE_PORT; // Use internal port, connect via container IP
 
-    const session: SessionInfo = { sessionId, tenantId, containerId: container.id, bridgePort, startedAt: new Date().toISOString() };
+    const session: SessionInfo = { sessionId, tenantId, containerId: container.id, bridgePort, startedAt: new Date().toISOString(), bridgeHost: containerIp };
     this.sessions.set(sessionId, session);
     this.tenantSessions.set(tenantId, sessionId);
     return session;
