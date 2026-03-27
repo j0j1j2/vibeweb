@@ -37,7 +37,11 @@ export class SessionManager {
       `WORKSPACE=/workspace`,
     ];
     if (authToken) {
-      env.push(`ANTHROPIC_API_KEY=${authToken}`);
+      if (authToken.startsWith("sk-ant-oat")) {
+        env.push(`CLAUDE_CODE_OAUTH_TOKEN=${authToken}`);
+      } else {
+        env.push(`ANTHROPIC_API_KEY=${authToken}`);
+      }
     }
 
     // Use Docker named volume — bind mounts from container paths don't work in DinD

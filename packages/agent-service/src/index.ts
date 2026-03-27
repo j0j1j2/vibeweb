@@ -70,14 +70,24 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
     await container.start();
 
     // Capture output to find the OAuth URL
+    // setup-token wraps the URL across multiple lines in TTY mode,
+    // so we strip all whitespace/ANSI and look for the full URL
     const url = await new Promise<string>((resolve, reject) => {
       let output = "";
-      const timeout = setTimeout(() => reject(new Error("Timeout. Output: " + output.substring(0, 500))), 30000);
+      const timeout = setTimeout(() => reject(new Error("Timeout. Output: " + output.substring(0, 1000))), 30000);
       stream.on("data", (chunk: Buffer) => {
         output += chunk.toString();
-        const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n\r]/g, "");
-        const m = clean.match(/(https:\/\/claude\.com\/[^\s]+)/);
-        if (m) { clearTimeout(timeout); resolve(m[1]); }
+        // Strip ANSI codes, control chars, and ALL whitespace to rejoin wrapped URL
+        const clean = output
+          .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+          .replace(/[\r\n\t]/g, "")
+          .replace(/[^\x20-\x7E]/g, "");
+        // Match the full URL (now on one line after stripping)
+        const m = clean.match(/(https:\/\/claude\.com\/cai\/oauth\/authorize\?[^]*?state=[A-Za-z0-9_-]+)/);
+        if (m) {
+          clearTimeout(timeout);
+          resolve(m[1].replace(/Paste.*$/, ""));
+        }
       });
     });
 
@@ -165,9 +175,15 @@ app.delete<{ Params: { tenantId: string } }>("/auth/claude/:tenantId", async (re
 });
 
 function checkCredentials(dir: string): boolean {
-  if (!fs.existsSync(dir)) return false;
-  const files = fs.readdirSync(dir);
-  return files.some(f => f.includes("credential") || f.includes("auth") || f.endsWith(".json"));
+  return fs.existsSync(path.join(dir, "oauth-token"));
+}
+
+function readOAuthToken(tenantId: string): string | null {
+  const tokenFile = path.join(tenantsDir, tenantId, "claude-auth", "oauth-token");
+  if (fs.existsSync(tokenFile)) {
+    return fs.readFileSync(tokenFile, "utf-8").trim();
+  }
+  return null;
 }
 
 const start = async () => {
@@ -290,11 +306,9 @@ async function handleSessionEnd(sessionId: string, userWs: WebSocket): Promise<v
 }
 
 function resolveAuthToken(tenantId: string): string | null {
-  // Check if tenant has claude-auth credentials (from claude login)
-  const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
-  if (checkCredentials(claudeAuthDir)) {
-    return ""; // Empty string = use mounted credentials instead of API key
-  }
+  // Check for OAuth token (from setup-token)
+  const oauthToken = readOAuthToken(tenantId);
+  if (oauthToken) return oauthToken;
   // Fallback to API key
   if (FALLBACK_API_KEY) return FALLBACK_API_KEY;
   return null;
