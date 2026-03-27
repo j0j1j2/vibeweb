@@ -1,7 +1,7 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "@/auth";
 import {
-  Monitor, Layout, FolderOpen, Database, Plug, Settings,
+  Monitor, FolderOpen, Database, Plug, Settings,
   LayoutDashboard, LogOut, ChevronDown, ChevronRight, Sparkles,
 } from "lucide-react";
 import { useState } from "react";
@@ -53,7 +53,6 @@ export function Sidebar({ tenants }: { tenants: TenantNav[] }) {
             {expanded[t.id] && (
               <div className="ml-3 pl-2 mt-0.5 space-y-px border-l border-gray-100">
                 <NavItem to={`/t/${t.id}/preview`} icon={Monitor} label="Preview" active={isActive(`/t/${t.id}/preview`)} />
-                <NavItem to={`/t/${t.id}/view`} icon={Layout} label="View" active={isActive(`/t/${t.id}/view`)} />
                 <NavItem to={`/t/${t.id}/files`} icon={FolderOpen} label="Files" active={isActive(`/t/${t.id}/files`)} />
                 <NavItem to={`/t/${t.id}/db`} icon={Database} label="Database" active={isActive(`/t/${t.id}/db`)} />
                 <NavItem to={`/t/${t.id}/api`} icon={Plug} label="API" active={isActive(`/t/${t.id}/api`)} />

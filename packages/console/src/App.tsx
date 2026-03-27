@@ -5,7 +5,6 @@ import { ChatLayout } from "@/components/ChatLayout";
 import { LoginPage } from "@/pages/LoginPage";
 import { AdminPage } from "@/pages/AdminPage";
 import { PreviewPage } from "@/pages/PreviewPage";
-import { ViewPage } from "@/pages/ViewPage";
 import { FilesPage } from "@/pages/FilesPage";
 import { DbPage } from "@/pages/DbPage";
 import { ApiPage } from "@/pages/ApiPage";
@@ -44,7 +43,6 @@ export function App() {
 
             {/* Pages with chat panel */}
             <Route path="/t/:tenantId/preview" element={<ChatLayout><PreviewPage /></ChatLayout>} />
-            <Route path="/t/:tenantId/view" element={<ChatLayout><ViewPage /></ChatLayout>} />
             <Route path="/t/:tenantId/files" element={<ChatLayout><FilesPage /></ChatLayout>} />
             <Route path="/t/:tenantId/db" element={<ChatLayout><DbPage /></ChatLayout>} />
             <Route path="/t/:tenantId/api" element={<ChatLayout><ApiPage /></ChatLayout>} />

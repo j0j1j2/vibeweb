@@ -56,7 +56,7 @@ export function AdminPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Tenants</h1>
         <button onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800">
+          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 transition-colors">
           <Plus className="w-4 h-4" /> New Tenant
         </button>
       </div>
@@ -182,12 +182,12 @@ function TenantRow({ tenant, claudeConnected, expanded, onToggleAuth, onDelete, 
           }`}>{tenant.status}</span>
         </td>
         <td className="px-4 py-3 text-right space-x-1">
-          <Link to={`/t/${tenant.id}/chat`}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-violet-600 hover:bg-violet-50">
+          <Link to={`/t/${tenant.id}/preview`}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors">
             <ExternalLink className="w-3 h-3" /> Open
           </Link>
           <button onClick={onDelete}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-red-500 hover:bg-red-50">
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
             <Trash2 className="w-3 h-3" /> Delete
           </button>
         </td>
@@ -200,7 +200,7 @@ function TenantRow({ tenant, claudeConnected, expanded, onToggleAuth, onDelete, 
             {claudeConnected ? (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Claude account connected for this tenant.</span>
-                <button onClick={handleDisconnect} className="text-sm text-red-500 hover:underline">Disconnect</button>
+                <button onClick={handleDisconnect} className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors">Disconnect</button>
               </div>
             ) : (
               <div className="space-y-3 max-w-xl">

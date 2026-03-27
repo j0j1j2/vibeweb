@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, createContext, useContext, ty
 import { useParams } from "react-router-dom";
 import { ChatPanel } from "@/components/ChatPanel";
 import { getTenant } from "@/api";
+import { MessageSquare, PanelRightClose, PanelRightOpen } from "lucide-react";
 
 interface Message {
   role: "user" | "assistant";
@@ -88,15 +89,38 @@ export function ChatLayout({ children }: { children: ReactNode }) {
     wsRef.current.send(JSON.stringify({ type: "message", sessionId, content }));
   }, [sessionId]);
 
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <ChatContext.Provider value={{ subdomain, connected }}>
       <div className="flex h-full">
         <div className="flex-1 min-w-0 overflow-hidden">
           {children}
         </div>
-        <div className="w-[380px] flex-shrink-0">
-          <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} />
-        </div>
+
+        {collapsed ? (
+          <div className="w-10 flex-shrink-0 border-l border-gray-100 bg-gray-50/50 flex flex-col items-center py-3">
+            <button
+              onClick={() => setCollapsed(false)}
+              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-violet-600 transition-colors"
+              title="Open chat"
+            >
+              <PanelRightOpen className="w-4 h-4" />
+            </button>
+            <div className={`mt-2 w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-gray-300"}`} />
+          </div>
+        ) : (
+          <div className="w-[380px] flex-shrink-0 relative">
+            <button
+              onClick={() => setCollapsed(true)}
+              className="absolute top-3 right-3 z-10 p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Collapse chat"
+            >
+              <PanelRightClose className="w-4 h-4" />
+            </button>
+            <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} />
+          </div>
+        )}
       </div>
     </ChatContext.Provider>
   );

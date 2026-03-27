@@ -44,7 +44,7 @@ export function SettingsPage() {
           {status?.last_deployment && <span className="text-gray-500"> Last: {new Date(status.last_deployment).toLocaleString()}</span>}
         </p>
         <button onClick={handleDeploy} disabled={deploying}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-40">
+          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40 transition-colors">
           <Rocket className="w-4 h-4" />{deploying ? "Deploying..." : "Deploy to Live"}
         </button>
         {deployMsg && <p className="mt-2 text-sm text-emerald-600">{deployMsg}</p>}
