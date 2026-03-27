@@ -19,7 +19,8 @@ services:
 
   control-api:
     build:
-      context: packages/control-api
+      context: .
+      dockerfile: packages/control-api/Dockerfile
     environment:
       - DATA_DIR=/data
     ports:
@@ -29,7 +30,8 @@ services:
 
   function-runner:
     build:
-      context: packages/function-runner
+      context: .
+      dockerfile: packages/function-runner/Dockerfile
     environment:
       - DATA_DIR=/data
     volumes:
@@ -40,7 +42,8 @@ services:
 
   preview-server:
     build:
-      context: packages/preview-server
+      context: .
+      dockerfile: packages/preview-server/Dockerfile
     environment:
       - DATA_DIR=/data
     volumes:

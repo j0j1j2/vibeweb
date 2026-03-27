@@ -1,9 +1,9 @@
-import chokidar from "chokidar";
+import chokidar, { type FSWatcher } from "chokidar";
 import path from "node:path";
 import type { RoomManager } from "./rooms.js";
 
 export class TenantWatcher {
-  private watchers = new Map<string, chokidar.FSWatcher>();
+  private watchers = new Map<string, FSWatcher>();
 
   constructor(private tenantsDir: string, private rooms: RoomManager) {}
 
