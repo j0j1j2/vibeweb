@@ -17,4 +17,14 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOpts): Pr
     reply.header("x-tenant-id", tenant.id);
     return reply.status(200).send({ ok: true });
   });
+
+  app.post<{ Body: { api_key: string } }>("/auth/login", async (req, reply) => {
+    const { api_key } = req.body;
+    if (!api_key) return reply.status(400).send({ error: "api_key is required" });
+    const adminKey = process.env.ADMIN_API_KEY;
+    if (adminKey && api_key === adminKey) return { admin: true };
+    const tenant = db.getTenantByApiKey(api_key);
+    if (!tenant) return reply.status(401).send({ error: "invalid api key" });
+    return tenant;
+  });
 }

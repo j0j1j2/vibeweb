@@ -7,6 +7,11 @@ interface TenantRoutesOpts { db: Db; tenantsDir: string; }
 export async function tenantRoutes(app: FastifyInstance, opts: TenantRoutesOpts): Promise<void> {
   const { db, tenantsDir } = opts;
 
+  app.get("/tenants", async (req, reply) => {
+    const tenants = db.listTenants();
+    return tenants;
+  });
+
   app.post<{ Body: { subdomain: string; name: string } }>("/tenants", async (req, reply) => {
     const { subdomain, name } = req.body;
     if (!subdomain || !name) return reply.status(400).send({ error: "subdomain and name are required" });

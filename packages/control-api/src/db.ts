@@ -13,6 +13,8 @@ export interface Db {
   setOAuthToken(tenantId: string, encryptedToken: string, expiresAt: string): void;
   getOAuthToken(tenantId: string): { claude_oauth_token: string | null; claude_token_expires_at: string | null } | undefined;
   clearOAuthToken(tenantId: string): void;
+  getTenantByApiKey(apiKey: string): Tenant | undefined;
+  listTenants(): Tenant[];
   close(): void;
 }
 
@@ -70,6 +72,8 @@ export function createDb(dbPath: string): Db {
     setOAuthToken: db.prepare("UPDATE tenants SET claude_oauth_token = ?, claude_token_expires_at = ?, updated_at = ? WHERE id = ?"),
     getOAuthToken: db.prepare("SELECT claude_oauth_token, claude_token_expires_at FROM tenants WHERE id = ?"),
     clearOAuthToken: db.prepare("UPDATE tenants SET claude_oauth_token = NULL, claude_token_expires_at = NULL, updated_at = ? WHERE id = ?"),
+    getTenantByApiKey: db.prepare("SELECT * FROM tenants WHERE api_key = ? AND status != 'deleted'"),
+    listTenants: db.prepare("SELECT * FROM tenants WHERE status != 'deleted' ORDER BY created_at DESC"),
   };
 
   return {
@@ -106,6 +110,12 @@ export function createDb(dbPath: string): Db {
     },
     clearOAuthToken(tenantId: string): void {
       stmts.clearOAuthToken.run(new Date().toISOString(), tenantId);
+    },
+    getTenantByApiKey(apiKey: string): Tenant | undefined {
+      return stmts.getTenantByApiKey.get(apiKey) as Tenant | undefined;
+    },
+    listTenants(): Tenant[] {
+      return stmts.listTenants.all() as Tenant[];
     },
     close(): void {
       db.close();
