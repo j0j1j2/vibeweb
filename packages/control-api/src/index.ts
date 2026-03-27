@@ -5,6 +5,7 @@ import { CONTROL_API_PORT } from "@vibeweb/shared";
 import { createDb } from "./db.js";
 import { tenantRoutes } from "./routes/tenants.js";
 import { authRoutes } from "./routes/auth.js";
+import { oauthRoutes } from "./routes/oauth.js";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const tenantsDir = path.join(DATA_DIR, "tenants");
@@ -14,6 +15,7 @@ const db = createDb(dbPath);
 const app = Fastify({ logger: true });
 app.register(tenantRoutes, { db, tenantsDir });
 app.register(authRoutes, { db });
+app.register(oauthRoutes, { db, tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? "" });
 app.get("/health", async () => ({ status: "ok" }));
 const start = async () => { try { await app.listen({ port: CONTROL_API_PORT, host: "0.0.0.0" }); } catch (err) { app.log.error(err); process.exit(1); } };
 start();

@@ -27,7 +27,7 @@ describe("db", () => {
       expect(tenant.api_key).toBeTruthy();
 
       const found = db.getTenantById(tenant.id);
-      expect(found).toEqual(tenant);
+      expect(found).toMatchObject(tenant);
     });
 
     it("finds tenant by subdomain", () => {

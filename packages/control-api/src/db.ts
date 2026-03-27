@@ -10,6 +10,9 @@ export interface Db {
   deleteTenant(id: string): void;
   recordDeployment(tenantId: string, backupPath: string | null): Deployment;
   getLatestDeployment(tenantId: string): Deployment | undefined;
+  setOAuthToken(tenantId: string, encryptedToken: string, expiresAt: string): void;
+  getOAuthToken(tenantId: string): { claude_oauth_token: string | null; claude_token_expires_at: string | null } | undefined;
+  clearOAuthToken(tenantId: string): void;
   close(): void;
 }
 
@@ -35,7 +38,20 @@ export function createDb(dbPath: string): Db {
       deployed_at TEXT NOT NULL,
       backup_path TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      container_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      last_activity_at TEXT NOT NULL
+    );
   `);
+
+  try { db.exec("ALTER TABLE tenants ADD COLUMN claude_oauth_token TEXT"); } catch { /* column already exists */ }
+  try { db.exec("ALTER TABLE tenants ADD COLUMN claude_token_expires_at TEXT"); } catch { /* column already exists */ }
 
   const stmts = {
     insertTenant: db.prepare(
@@ -51,6 +67,9 @@ export function createDb(dbPath: string): Db {
     getLatestDeployment: db.prepare(
       "SELECT * FROM deployments WHERE tenant_id = ? ORDER BY deployed_at DESC LIMIT 1"
     ),
+    setOAuthToken: db.prepare("UPDATE tenants SET claude_oauth_token = ?, claude_token_expires_at = ?, updated_at = ? WHERE id = ?"),
+    getOAuthToken: db.prepare("SELECT claude_oauth_token, claude_token_expires_at FROM tenants WHERE id = ?"),
+    clearOAuthToken: db.prepare("UPDATE tenants SET claude_oauth_token = NULL, claude_token_expires_at = NULL, updated_at = ? WHERE id = ?"),
   };
 
   return {
@@ -78,6 +97,15 @@ export function createDb(dbPath: string): Db {
     },
     getLatestDeployment(tenantId: string): Deployment | undefined {
       return stmts.getLatestDeployment.get(tenantId) as Deployment | undefined;
+    },
+    setOAuthToken(tenantId: string, encryptedToken: string, expiresAt: string): void {
+      stmts.setOAuthToken.run(encryptedToken, expiresAt, new Date().toISOString(), tenantId);
+    },
+    getOAuthToken(tenantId: string): { claude_oauth_token: string | null; claude_token_expires_at: string | null } | undefined {
+      return stmts.getOAuthToken.get(tenantId) as { claude_oauth_token: string | null; claude_token_expires_at: string | null } | undefined;
+    },
+    clearOAuthToken(tenantId: string): void {
+      stmts.clearOAuthToken.run(new Date().toISOString(), tenantId);
     },
     close(): void {
       db.close();
