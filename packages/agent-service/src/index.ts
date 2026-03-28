@@ -116,47 +116,89 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
   }
 });
 
-// POST /auth/claude/:tenantId/code - Submit the OAuth authorization code
+// POST /auth/claude/:tenantId/code - Exchange auth code via setup-token in container
 app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude/:tenantId/code", async (req, reply) => {
   const { tenantId } = req.params;
   const { code } = req.body;
   if (!code) return reply.status(400).send({ error: "code is required" });
 
-  const entry = loginContainers.get(tenantId);
-  if (!entry) {
-    return reply.status(404).send({ error: "no active login session. Click Connect first." });
-  }
+  const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
+  const networkName = process.env.DOCKER_NETWORK ?? "vibeweb_default";
 
   try {
-    // Try sending the code via stdin (Tty mode needs \r)
-    entry.stream.write(code + "\r");
-    app.log.info(`Sent auth code to login container for ${tenantId}`);
+    app.log.info(`Exchanging auth code for tenant ${tenantId}`);
 
-    // Wait for container to exit or credentials to appear (whichever first)
-    const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
-    const success = await Promise.race([
-      entry.container.wait().then(() => checkCredentials(claudeAuthDir)),
-      // Also poll for credentials (in case CLI auto-detects without stdin)
-      new Promise<boolean>((resolve) => {
-        const poll = setInterval(() => {
-          if (checkCredentials(claudeAuthDir)) { clearInterval(poll); resolve(true); }
-        }, 1000);
-        setTimeout(() => { clearInterval(poll); resolve(false); }, 30000);
-      }),
+    // Run setup-token in container, pipe the code via stdin
+    // The code format is: {authCode}#{state} — must be sent as-is
+    const container = await docker.createContainer({
+      Image: SESSION_IMAGE,
+      Cmd: ["sh", "-c", `
+        mkdir -p /data/tenants/${tenantId}/claude-auth &&
+        rm -f /home/vibe/.claude && ln -s /data/tenants/${tenantId}/claude-auth /home/vibe/.claude &&
+        echo '${code.replace(/'/g, "'\\''")}' | su vibe -c "HOME=/home/vibe claude setup-token"
+      `],
+      Env: [`HOME=/root`],
+      HostConfig: {
+        Mounts: [{ Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false }],
+        NetworkMode: networkName,
+      },
+      Labels: { "vibeweb.role": "auth-code-exchange", "vibeweb.tenant": tenantId },
+      Tty: false,
+    });
+
+    await container.start();
+
+    // Wait for completion (max 60s)
+    await Promise.race([
+      container.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 60000)),
     ]);
 
-    if (success) {
-      try { await entry.container.stop(); await entry.container.remove(); } catch {}
-      loginContainers.delete(tenantId);
+    // Check logs for token
+    const logs = (await container.logs({ stdout: true, stderr: true })).toString();
+    await container.remove().catch(() => {});
+
+    // Check if token was saved
+    const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
+    const hasCredentials = checkCredentials(claudeAuthDir);
+
+    // Also create .claude.json if not exists
+    const claudeJsonPath = path.join(claudeAuthDir, ".claude.json");
+    if (!fs.existsSync(claudeJsonPath)) {
+      fs.writeFileSync(claudeJsonPath, JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
     }
 
-    app.log.info(`Auth result for ${tenantId}: credentials=${success}`);
-    return { success };
+    app.log.info(`Auth code exchange for ${tenantId}: credentials=${hasCredentials}`);
+
+    if (!hasCredentials) {
+      // Log last part of output for debugging
+      const cleanLogs = logs.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n]/g, "");
+      app.log.error(`Exchange failed. Logs: ${cleanLogs.substring(cleanLogs.length - 300)}`);
+    }
+
+    return { success: hasCredentials };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to submit code";
-    loginContainers.delete(tenantId);
+    const message = err instanceof Error ? err.message : "Failed to exchange code";
+    app.log.error(`Code exchange error: ${message}`);
     return reply.status(500).send({ error: message });
   }
+});
+
+// POST /auth/claude/:tenantId/token - Save token directly (admin pastes from setup-token)
+app.post<{ Params: { tenantId: string }; Body: { token: string } }>("/auth/claude/:tenantId/token", async (req, reply) => {
+  const { tenantId } = req.params;
+  const { token } = req.body;
+  if (!token || !token.trim()) return reply.status(400).send({ error: "token is required" });
+
+  const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
+  fs.mkdirSync(claudeAuthDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeAuthDir, "oauth-token"), token.trim());
+
+  // Create minimal .claude.json for onboarding bypass
+  fs.writeFileSync(path.join(claudeAuthDir, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
+
+  app.log.info(`Token saved for tenant ${tenantId}`);
+  return { success: true };
 });
 
 // GET /auth/claude/:tenantId/status - Check if tenant has credentials + details

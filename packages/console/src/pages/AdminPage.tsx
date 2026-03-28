@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { listTenants, createTenant, deleteTenant, resetTenantApiKey } from "@/api";
 import {
@@ -138,69 +138,38 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
   onRefresh: () => void;
 }) {
   const claudeConnected = claudeStatus?.connected ?? false;
-  const [loginUrl, setLoginUrl] = useState<string | null>(null);
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [authCode, setAuthCode] = useState("");
-  const [codeSubmitting, setCodeSubmitting] = useState(false);
-  const [codeError, setCodeError] = useState("");
-
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stopPolling = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  };
-
-  const startPolling = () => {
-    stopPolling();
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/agent-api/auth/claude/${tenant.id}/status`);
-        const data = await res.json();
-        if (data.connected) {
-          stopPolling();
-          setLoginUrl(null); setAuthCode(""); setLoginLoading(false);
-          onRefresh();
-        }
-      } catch {}
-    }, 2000);
-    // Stop after 5 min
-    setTimeout(stopPolling, 300_000);
-  };
-
-  const handleLogin = async () => {
-    setLoginLoading(true); setLoginUrl(null); setCodeError("");
-    try {
-      const res = await fetch(`/agent-api/auth/claude/${tenant.id}/login`, { method: "POST" });
-      const data = await res.json();
-      if (data.url) {
-        setLoginUrl(data.url);
-        startPolling(); // Auto-detect when auth completes
-      }
-      else setCodeError(data.error || "Failed");
-    } catch { setCodeError("Failed"); }
-    finally { setLoginLoading(false); }
-  };
+  const [codeInput, setCodeInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const handleSubmitCode = async () => {
-    if (!authCode.trim()) return;
-    setCodeSubmitting(true); setCodeError("");
+    const input = codeInput.trim();
+    if (!input) return;
+    setSubmitting(true); setSubmitError("");
     try {
-      const res = await fetch(`/agent-api/auth/claude/${tenant.id}/code`, {
+      // If it's a token (sk-ant-oat...), save directly. Otherwise treat as auth code.
+      const isToken = input.startsWith("sk-ant-");
+      const url = isToken
+        ? `/agent-api/auth/claude/${tenant.id}/token`
+        : `/agent-api/auth/claude/${tenant.id}/code`;
+      const body = isToken ? { token: input } : { code: input };
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: authCode.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.success) { stopPolling(); setLoginUrl(null); setAuthCode(""); onRefresh(); }
-      else setCodeError(data.error || "Authentication failed. Try again.");
-    } catch { setCodeError("Failed"); }
-    finally { setCodeSubmitting(false); }
+      if (data.success) { setCodeInput(""); onRefresh(); }
+      else setSubmitError(data.error || "Failed. Make sure the code is correct.");
+    } catch { setSubmitError("Failed to connect"); }
+    finally { setSubmitting(false); }
   };
 
   const handleDisconnect = async () => {
     if (!confirm(`Disconnect Claude for "${tenant.name}"?`)) return;
     await fetch(`/agent-api/auth/claude/${tenant.id}`, { method: "DELETE" });
-    setLoginUrl(null); setAuthCode("");
+    setCodeInput("");
     onRefresh();
   };
 
@@ -263,40 +232,28 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
                 <button onClick={handleDisconnect} className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors">Disconnect</button>
               </div>
             ) : (
-              <div className="space-y-3 max-w-xl">
-                {loginUrl ? (
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-1.5">Open this URL and sign in with your Claude account:</p>
-                      <a href={loginUrl} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-sm text-violet-600 hover:underline break-all">
-                        <LinkIcon className="w-3.5 h-3.5 flex-shrink-0" />{loginUrl.substring(0, 70)}...
-                      </a>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
-                      Waiting for authentication to complete...
-                    </div>
-                    <details className="text-sm">
-                      <summary className="text-gray-400 cursor-pointer hover:text-gray-600">If prompted for a code, paste it here</summary>
-                      <div className="flex gap-2 mt-2">
-                        <input value={authCode} onChange={(e) => setAuthCode(e.target.value)} placeholder="Authorization code..."
-                          className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
-                        <button onClick={handleSubmitCode} disabled={codeSubmitting || !authCode.trim()}
-                          className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40">
-                          {codeSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit"}
-                        </button>
-                      </div>
-                    </details>
-                    {codeError && <p className="text-sm text-red-500">{codeError}</p>}
+              <div className="space-y-4 max-w-xl">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-1">Connect Claude Account</p>
+                  <ol className="text-xs text-gray-400 mb-3 space-y-1 list-decimal list-inside">
+                    <li>Run <code className="px-1.5 py-0.5 bg-gray-100 rounded text-violet-600">claude setup-token</code> in your terminal</li>
+                    <li>Open the URL and authorize</li>
+                    <li>Copy the authentication code and paste it below</li>
+                  </ol>
+                  <div className="flex gap-2">
+                    <input
+                      value={codeInput}
+                      onChange={(e) => setCodeInput(e.target.value)}
+                      placeholder="Paste authentication code or token..."
+                      className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                    />
+                    <button onClick={handleSubmitCode} disabled={submitting || !codeInput.trim()}
+                      className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40 whitespace-nowrap">
+                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Connect"}
+                    </button>
                   </div>
-                ) : (
-                  <button onClick={handleLogin} disabled={loginLoading}
-                    className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40">
-                    {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    {loginLoading ? "Starting..." : "Connect Claude Account"}
-                  </button>
-                )}
+                  {submitError && <p className="mt-1 text-sm text-red-500">{submitError}</p>}
+                </div>
               </div>
             )}
           </td>
