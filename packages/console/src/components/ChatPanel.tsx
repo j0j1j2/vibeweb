@@ -14,9 +14,10 @@ interface ChatPanelProps {
   onSend: (content: string) => void;
   connected: boolean;
   loading: boolean;
+  status?: string;
 }
 
-export function ChatPanel({ messages, onSend, connected, loading }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, connected, loading, status }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +77,16 @@ export function ChatPanel({ messages, onSend, connected, loading }: ChatPanelPro
             </div>
           </div>
         ))}
-        {messages.length === 0 && (
+        {/* Status indicator while Claude is working */}
+        {status && (
+          <div className="flex items-center gap-2.5 px-2 py-2">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-violet-100">
+              <div className="w-3 h-3 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+            <span className="text-[13px] text-violet-600 animate-pulse">{status}</span>
+          </div>
+        )}
+        {messages.length === 0 && !status && (
           <div className="flex flex-col items-center justify-center h-full px-4 pb-8">
             <Bot className="w-10 h-10 text-violet-300 mb-3" />
             <p className="text-sm font-medium text-gray-600 mb-1">What would you like to build?</p>

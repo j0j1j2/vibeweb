@@ -27,6 +27,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [subdomain, setSubdomain] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
@@ -48,6 +49,40 @@ export function ChatLayout({ children }: { children: ReactNode }) {
       const msg = JSON.parse(event.data);
       if (msg.type === "session.ready") { setSessionId(msg.sessionId); setConnected(true); }
       else if (msg.type === "stream") {
+        const d = msg.data;
+
+        // Update status indicator based on event type
+        if (d?.type === "system") {
+          setStatus("Connecting...");
+        } else if (d?.type === "assistant") {
+          const blocks = d.message?.content;
+          if (Array.isArray(blocks)) {
+            const hasThinking = blocks.some((b: any) => b.type === "thinking");
+            const hasToolUse = blocks.some((b: any) => b.type === "tool_use");
+            const hasText = blocks.some((b: any) => b.type === "text");
+            if (hasToolUse) {
+              const tool = blocks.find((b: any) => b.type === "tool_use");
+              const toolName = tool?.name ?? "";
+              const filePath = tool?.input?.file_path || tool?.input?.command || "";
+              if (toolName === "Write" || toolName === "Edit") setStatus(`Writing ${filePath.split("/").pop() || "file"}...`);
+              else if (toolName === "Read") setStatus(`Reading ${filePath.split("/").pop() || "file"}...`);
+              else if (toolName === "Bash") setStatus("Running command...");
+              else if (toolName) setStatus(`Using ${toolName}...`);
+              else setStatus("Working...");
+            } else if (hasText) {
+              setStatus("");
+            } else if (hasThinking) {
+              setStatus("Thinking...");
+            }
+          }
+        } else if (d?.type === "user") {
+          // tool_result — Claude got the result, processing next step
+          setStatus("Working...");
+        } else if (d?.type === "result") {
+          setStatus("");
+        }
+
+        // Update messages
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (!last || last.role !== "assistant" || last.done) {
@@ -55,21 +90,20 @@ export function ChatLayout({ children }: { children: ReactNode }) {
           }
           const updated = [...prev];
           const current = { ...updated[updated.length - 1] };
-          if (msg.data?.type === "assistant") {
-            // stream-json format: data.message.content is array of {type:"text",text:"..."}
-            const msgContent = msg.data.message?.content;
+          if (d?.type === "assistant") {
+            const msgContent = d.message?.content;
             if (Array.isArray(msgContent)) {
               for (const block of msgContent) {
                 if (block.type === "text") current.content += block.text ?? "";
                 else if (block.type === "tool_use") current.toolUse = [...(current.toolUse ?? []), { tool: block.name, path: block.input?.file_path }];
               }
-            } else if (typeof msg.data.content === "string") {
-              current.content += msg.data.content;
+            } else if (typeof d.content === "string") {
+              current.content += d.content;
             }
-          } else if (msg.data?.type === "text") {
-            current.content += msg.data.content ?? "";
-          } else if (msg.data?.type === "tool_use") {
-            current.toolUse = [...(current.toolUse ?? []), { tool: msg.data.tool ?? msg.data.name, path: msg.data.path }];
+          } else if (d?.type === "text") {
+            current.content += d.content ?? "";
+          } else if (d?.type === "tool_use") {
+            current.toolUse = [...(current.toolUse ?? []), { tool: d.tool ?? d.name, path: d.path }];
           }
           updated[updated.length - 1] = current;
           return updated;
@@ -83,6 +117,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
           return updated;
         });
         setLoading(false);
+        setStatus("");
         // Notify preview to refresh after Claude finishes a turn
         window.dispatchEvent(new Event("vibeweb:preview-refresh"));
       } else if (msg.type === "error") {
@@ -102,6 +137,8 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   const handleSend = useCallback((content: string) => {
     if (!wsRef.current || !sessionId) return;
     setMessages((prev) => [...prev, { role: "user", content, toolUse: [], done: true }]);
+    setStatus("Thinking...");
+    setLoading(true);
     wsRef.current.send(JSON.stringify({ type: "message", sessionId, content }));
   }, [sessionId]);
 
@@ -134,7 +171,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             >
               <PanelRightClose className="w-4 h-4" />
             </button>
-            <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} />
+            <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} status={status} />
           </div>
         )}
       </div>
