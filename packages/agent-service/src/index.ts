@@ -159,10 +159,36 @@ app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude
   }
 });
 
-// GET /auth/claude/:tenantId/status - Check if tenant has credentials
+// GET /auth/claude/:tenantId/status - Check if tenant has credentials + details
 app.get<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/status", async (req) => {
-  const claudeAuthDir = path.join(tenantsDir, req.params.tenantId, "claude-auth");
-  return { connected: checkCredentials(claudeAuthDir) };
+  const { tenantId } = req.params;
+  const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
+  const connected = checkCredentials(claudeAuthDir);
+
+  if (!connected) return { connected: false };
+
+  const tokenFile = path.join(claudeAuthDir, "oauth-token");
+  const token = fs.readFileSync(tokenFile, "utf-8").trim();
+  const tokenPrefix = token.substring(0, 20) + "..." + token.substring(token.length - 4);
+
+  // Get file modification time as "connected since"
+  const stat = fs.statSync(tokenFile);
+  const connectedAt = stat.mtime.toISOString();
+
+  // Read metadata if available
+  const metaFile = path.join(claudeAuthDir, "meta.json");
+  let meta: Record<string, unknown> = {};
+  if (fs.existsSync(metaFile)) {
+    try { meta = JSON.parse(fs.readFileSync(metaFile, "utf-8")); } catch {}
+  }
+
+  return {
+    connected: true,
+    tokenPrefix,
+    connectedAt,
+    tokenType: token.startsWith("sk-ant-oat") ? "OAuth (setup-token)" : "API Key",
+    ...meta,
+  };
 });
 
 // DELETE /auth/claude/:tenantId - Remove tenant credentials

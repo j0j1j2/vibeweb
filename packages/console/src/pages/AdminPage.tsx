@@ -14,20 +14,19 @@ export function AdminPage() {
   const [subdomain, setSubdomain] = useState("");
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
-  const [claudeStatuses, setClaudeStatuses] = useState<Record<string, boolean>>({});
+  const [claudeStatuses, setClaudeStatuses] = useState<Record<string, any>>({});
   const [expandedAuth, setExpandedAuth] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const data = await listTenants().catch(() => []);
     setTenants(data);
     // Fetch claude status for each tenant
-    const statuses: Record<string, boolean> = {};
+    const statuses: Record<string, any> = {};
     await Promise.all(data.map(async (t: Tenant) => {
       try {
         const res = await fetch(`/agent-api/auth/claude/${t.id}/status`);
-        const s = await res.json();
-        statuses[t.id] = s.connected;
-      } catch { statuses[t.id] = false; }
+        statuses[t.id] = await res.json();
+      } catch { statuses[t.id] = { connected: false }; }
     }));
     setClaudeStatuses(statuses);
   }, []);
@@ -97,7 +96,7 @@ export function AdminPage() {
               <TenantRow
                 key={t.id}
                 tenant={t}
-                claudeConnected={claudeStatuses[t.id] ?? false}
+                claudeStatus={claudeStatuses[t.id] ?? { connected: false }}
                 expanded={expandedAuth === t.id}
                 onToggleAuth={() => setExpandedAuth(expandedAuth === t.id ? null : t.id)}
                 onDelete={() => handleDelete(t.id, t.name)}
@@ -114,14 +113,15 @@ export function AdminPage() {
   );
 }
 
-function TenantRow({ tenant, claudeConnected, expanded, onToggleAuth, onDelete, onRefresh }: {
+function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onRefresh }: {
   tenant: Tenant;
-  claudeConnected: boolean;
+  claudeStatus: any;
   expanded: boolean;
   onToggleAuth: () => void;
   onDelete: () => void;
   onRefresh: () => void;
 }) {
+  const claudeConnected = claudeStatus?.connected ?? false;
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
   const [authCode, setAuthCode] = useState("");
@@ -224,8 +224,20 @@ function TenantRow({ tenant, claudeConnected, expanded, onToggleAuth, onDelete, 
         <tr className="border-t border-gray-50">
           <td colSpan={5} className="px-6 py-4 bg-gray-50/50">
             {claudeConnected ? (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Claude account connected for this tenant.</span>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm max-w-lg">
+                  <div className="text-gray-400">Status</div>
+                  <div className="flex items-center gap-1.5 text-emerald-600 font-medium"><CheckCircle className="w-3.5 h-3.5" /> Connected</div>
+
+                  <div className="text-gray-400">Token</div>
+                  <div className="font-mono text-xs text-gray-600">{claudeStatus.tokenPrefix || "—"}</div>
+
+                  <div className="text-gray-400">Type</div>
+                  <div className="text-gray-600">{claudeStatus.tokenType || "—"}</div>
+
+                  <div className="text-gray-400">Connected</div>
+                  <div className="text-gray-600">{claudeStatus.connectedAt ? new Date(claudeStatus.connectedAt).toLocaleString() : "—"}</div>
+                </div>
                 <button onClick={handleDisconnect} className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors">Disconnect</button>
               </div>
             ) : (
