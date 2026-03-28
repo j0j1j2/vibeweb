@@ -98,9 +98,12 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
     // Monitor stream for token output (setup-token prints sk-ant-oat... after code exchange)
     stream.on("data", (chunk: Buffer) => {
       const text = chunk.toString().replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n]/g, "");
-      const tokenMatch = text.match(/(sk-ant-oat[A-Za-z0-9_-]{20,})/);
-      if (tokenMatch) {
-        const token = tokenMatch[1];
+      // Split by whitespace/newlines, find the token fragment
+      const words = text.split(/[\s\n\r]+/);
+      const tokenWord = words.find(w => w.startsWith("sk-ant-oat"));
+      if (tokenWord) {
+        // Clean: only keep base64url + hyphen chars
+        const token = tokenWord.replace(/[^A-Za-z0-9_-]/g, "");
         const authDir = path.join(tenantsDir, tenantId, "claude-auth");
         fs.mkdirSync(authDir, { recursive: true });
         fs.writeFileSync(path.join(authDir, "oauth-token"), token);
