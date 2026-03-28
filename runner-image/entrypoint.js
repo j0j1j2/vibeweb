@@ -2,6 +2,12 @@
 // executes it with the request from env vars, writes response to stdout.
 
 const path = require("node:path");
+const fs = require("node:fs");
+const { createRequire } = require("node:module");
+
+// Make require() available globally so ESM function files can use it
+// Resolve from /app where better-sqlite3 and other deps are installed
+globalThis.require = createRequire(path.resolve("/app/node_modules/"));
 
 async function main() {
   const fnPath = process.env.FUNCTION_PATH;
@@ -10,14 +16,28 @@ async function main() {
     return;
   }
 
-  const fullPath = path.join("/app", fnPath);
+  const functionsDir = process.env.FUNCTIONS_DIR || "/app";
+  const fullPath = path.join(functionsDir, fnPath);
+
+  // Create /data/db directory/symlink so functions using hardcoded DB paths work
+  const dbDir = process.env.DB_DIR;
+  if (dbDir) {
+    try {
+      fs.mkdirSync("/data", { recursive: true });
+      if (!fs.existsSync("/data/db")) {
+        fs.symlinkSync(dbDir, "/data/db");
+      }
+    } catch {
+      // May fail if non-root - that is ok
+    }
+  }
 
   let handler;
   try {
-    const mod = await import(fullPath);
+    const mod = await import("file://" + fullPath);
     handler = mod.default ?? mod;
   } catch (err) {
-    writeResponse({ status: 500, headers: {}, body: { error: `Failed to load function: ${err.message}` } });
+    writeResponse({ status: 500, headers: {}, body: { error: "Failed to load function: " + err.message } });
     return;
   }
 
@@ -27,22 +47,22 @@ async function main() {
   }
 
   const req = {
-    method: process.env.REQ_METHOD ?? "GET",
-    path: process.env.REQ_PATH ?? "/",
-    query: JSON.parse(process.env.REQ_QUERY ?? "{}"),
-    headers: JSON.parse(process.env.REQ_HEADERS ?? "{}"),
-    body: process.env.REQ_BODY ?? "",
+    method: process.env.REQ_METHOD || "GET",
+    path: process.env.REQ_PATH || "/",
+    query: JSON.parse(process.env.REQ_QUERY || "{}"),
+    headers: JSON.parse(process.env.REQ_HEADERS || "{}"),
+    body: process.env.REQ_BODY || "",
   };
 
   try {
     const result = await handler(req);
     writeResponse({
-      status: result.status ?? 200,
-      headers: result.headers ?? {},
-      body: result.body ?? null,
+      status: result.status || 200,
+      headers: result.headers || {},
+      body: result.body || null,
     });
   } catch (err) {
-    writeResponse({ status: 500, headers: {}, body: { error: `Function error: ${err.message}` } });
+    writeResponse({ status: 500, headers: {}, body: { error: "Function error: " + err.message } });
   }
 }
 

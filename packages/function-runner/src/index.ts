@@ -9,6 +9,11 @@ const tenantsDir = path.join(DATA_DIR, "tenants");
 
 const app = Fastify({ logger: true });
 
+// Accept any content type as raw text so we can pass it through to functions
+app.addContentTypeParser("*", { parseAs: "string" }, (_req, body, done) => {
+  done(null, body);
+});
+
 app.all<{ Params: { "*": string } }>("/api/*", async (req, reply) => {
   const tenantId = req.headers["x-tenant-id"] as string | undefined;
   if (!tenantId) return reply.status(400).send({ error: "missing x-tenant-id header" });

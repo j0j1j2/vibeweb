@@ -15,10 +15,16 @@ export interface RunFunctionOpts {
 export async function runInContainer(opts: RunFunctionOpts): Promise<FunctionResponse> {
   const { tenantId, functionPath, functionsDir, dbDir, request } = opts;
 
+  // Compute paths relative to the named volume mount
+  const relFunctionsDir = functionsDir.replace(/.*\/tenants\//, "");
+  const relDbDir = dbDir.replace(/.*\/tenants\//, "");
+
   const container = await docker.createContainer({
     Image: RUNNER_IMAGE,
     Env: [
       `FUNCTION_PATH=${functionPath}`,
+      `FUNCTIONS_DIR=/tenants/${relFunctionsDir}`,
+      `DB_DIR=/tenants/${relDbDir}`,
       `REQ_METHOD=${request.method}`,
       `REQ_PATH=${request.path}`,
       `REQ_QUERY=${JSON.stringify(request.query)}`,
@@ -26,7 +32,9 @@ export async function runInContainer(opts: RunFunctionOpts): Promise<FunctionRes
       `REQ_BODY=${request.body}`,
     ],
     HostConfig: {
-      Binds: [`${functionsDir}:/app:ro`, `${dbDir}:/data/db:rw`],
+      Mounts: [
+        { Type: "volume" as const, Source: process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data", Target: "/tenants", ReadOnly: false },
+      ],
       Memory: parseMemoryLimit(FUNCTION_MEMORY_LIMIT),
       NanoCpus: FUNCTION_CPU_LIMIT * 1e9,
       NetworkMode: "none",
