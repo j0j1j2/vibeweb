@@ -32,8 +32,8 @@ export function PreviewPage() {
 
   if (!subdomain) return <div className="flex items-center justify-center h-full text-gray-300">Loading...</div>;
 
-  // New site with no content — show welcome screen
-  if (hasContent === false) {
+  // New site with no content — show welcome screen (also during loading to avoid flash of 404)
+  if (hasContent !== true) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-8">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mb-6 shadow-lg shadow-violet-500/20">
