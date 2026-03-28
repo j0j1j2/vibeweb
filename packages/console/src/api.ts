@@ -20,6 +20,7 @@ export async function createTenant(subdomain: string, name: string) {
   return res.json();
 }
 export async function deleteTenant(id: string) { return apiFetch(`/tenants/${id}`, { method: "DELETE" }); }
+export async function resetTenantApiKey(id: string) { const res = await apiFetch(`/tenants/${id}/reset-key`, { method: "POST" }); return res.json(); }
 export async function deployTenant(id: string) { const res = await apiFetch(`/tenants/${id}/deploy`, { method: "POST" }); return res.json(); }
 export async function getTenantStatus(id: string) { const res = await apiFetch(`/tenants/${id}/status`); return res.json(); }
 export async function listFiles(tenantId: string) { const res = await apiFetch(`/tenants/${tenantId}/files`); return res.json(); }

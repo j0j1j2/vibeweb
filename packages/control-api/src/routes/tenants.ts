@@ -61,6 +61,13 @@ export async function tenantRoutes(app: FastifyInstance, opts: TenantRoutesOpts)
     return { message: "rolled back", backup_used: latest.backup_path };
   });
 
+  app.post<{ Params: { id: string } }>("/tenants/:id/reset-key", async (req, reply) => {
+    const tenant = db.getTenantById(req.params.id);
+    if (!tenant) return reply.status(404).send({ error: "tenant not found" });
+    const newKey = db.resetApiKey(req.params.id);
+    return { api_key: newKey };
+  });
+
   app.get<{ Params: { id: string } }>("/tenants/:id/status", async (req, reply) => {
     const tenant = db.getTenantById(req.params.id);
     if (!tenant) return reply.status(404).send({ error: "tenant not found" });

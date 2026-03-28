@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
-import { listTenants, createTenant, deleteTenant } from "@/api";
+import { listTenants, createTenant, deleteTenant, resetTenantApiKey } from "@/api";
 import {
   Plus, Trash2, ExternalLink, CheckCircle, XCircle,
   ExternalLink as LinkIcon, Loader2, ChevronDown, ChevronRight,
+  Copy, Key, RefreshCw, Check,
 } from "lucide-react";
 
-interface Tenant { id: string; subdomain: string; name: string; status: string; created_at: string; }
+interface Tenant { id: string; subdomain: string; name: string; api_key: string; status: string; created_at: string; }
 
 export function AdminPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -16,11 +17,11 @@ export function AdminPage() {
   const [creating, setCreating] = useState(false);
   const [claudeStatuses, setClaudeStatuses] = useState<Record<string, any>>({});
   const [expandedAuth, setExpandedAuth] = useState<string | null>(null);
+  const [newApiKey, setNewApiKey] = useState<{ tenantId: string; key: string } | null>(null);
 
   const refresh = useCallback(async () => {
     const data = await listTenants().catch(() => []);
     setTenants(data);
-    // Fetch claude status for each tenant
     const statuses: Record<string, any> = {};
     await Promise.all(data.map(async (t: Tenant) => {
       try {
@@ -36,11 +37,14 @@ export function AdminPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
-    await createTenant(subdomain.trim(), name.trim());
+    const result = await createTenant(subdomain.trim(), name.trim());
     setCreating(false);
     setShowCreate(false);
     setSubdomain("");
     setName("");
+    if (result?.api_key) {
+      setNewApiKey({ tenantId: result.id, key: result.api_key });
+    }
     refresh();
   };
 
@@ -79,6 +83,11 @@ export function AdminPage() {
         </form>
       )}
 
+      {/* API Key display after creation or reset */}
+      {newApiKey && (
+        <ApiKeyBanner apiKey={newApiKey.key} onDismiss={() => setNewApiKey(null)} />
+      )}
+
       {/* Tenant list with Claude connection management */}
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -100,6 +109,12 @@ export function AdminPage() {
                 expanded={expandedAuth === t.id}
                 onToggleAuth={() => setExpandedAuth(expandedAuth === t.id ? null : t.id)}
                 onDelete={() => handleDelete(t.id, t.name)}
+                onResetKey={async () => {
+                  if (!confirm(`Reset API key for "${t.name}"? The old key will stop working.`)) return;
+                  const result = await resetTenantApiKey(t.id);
+                  if (result?.api_key) setNewApiKey({ tenantId: t.id, key: result.api_key });
+                  refresh();
+                }}
                 onRefresh={refresh}
               />
             ))}
@@ -113,12 +128,13 @@ export function AdminPage() {
   );
 }
 
-function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onRefresh }: {
+function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onResetKey, onRefresh }: {
   tenant: Tenant;
   claudeStatus: any;
   expanded: boolean;
   onToggleAuth: () => void;
   onDelete: () => void;
+  onResetKey: () => void;
   onRefresh: () => void;
 }) {
   const claudeConnected = claudeStatus?.connected ?? false;
@@ -212,6 +228,10 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors">
             <ExternalLink className="w-3 h-3" /> Open
           </Link>
+          <button onClick={onResetKey}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors">
+            <Key className="w-3 h-3" /> Reset Key
+          </button>
           <button onClick={onDelete}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
             <Trash2 className="w-3 h-3" /> Delete
@@ -281,5 +301,37 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
         </tr>
       )}
     </>
+  );
+}
+
+function ApiKeyBanner({ apiKey, onDismiss }: { apiKey: string; onDismiss: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(apiKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="mb-6 p-4 border border-emerald-200 rounded-lg bg-emerald-50">
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Key className="w-4 h-4 text-emerald-600" />
+          <span className="text-sm font-semibold text-emerald-800">API Key</span>
+        </div>
+        <button onClick={onDismiss} className="text-xs text-gray-400 hover:text-gray-600">Dismiss</button>
+      </div>
+      <p className="text-xs text-emerald-700 mb-2">Copy this key now. It won't be shown again.</p>
+      <div className="flex gap-2">
+        <code className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-md text-xs font-mono text-gray-800 break-all select-all">
+          {apiKey}
+        </code>
+        <button onClick={handleCopy}
+          className="px-3 py-2 bg-emerald-600 text-white text-xs font-medium rounded-md hover:bg-emerald-500 transition-colors flex items-center gap-1.5">
+          {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+        </button>
+      </div>
+    </div>
   );
 }
