@@ -4,7 +4,7 @@ import { useAuth } from "@/auth";
 import { Sparkles } from "lucide-react";
 
 export function LoginPage() {
-  const [subdomain, setSubdomain] = useState("");
+  const [siteName, setSiteName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,9 +20,9 @@ export function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const ok = await login(subdomain.trim(), password);
+    const ok = await login(siteName.trim().toLowerCase(), password);
     setLoading(false);
-    if (!ok) setError("Invalid credentials");
+    if (!ok) setError("Invalid site name or password");
   };
 
   return (
@@ -36,18 +36,21 @@ export function LoginPage() {
         </div>
 
         <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
-          <p className="text-gray-400 text-sm mb-5">Sign in to your site</p>
+          <p className="text-gray-400 text-sm mb-5">Sign in to manage your site</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Subdomain</label>
-              <input
-                type="text"
-                value={subdomain}
-                onChange={(e) => setSubdomain(e.target.value)}
-                placeholder="my-site"
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
-                autoFocus
-              />
+              <label className="block text-xs font-medium text-gray-500 mb-1">Site Name</label>
+              <div className="flex items-center border border-gray-200 rounded-lg bg-gray-50 focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-colors">
+                <input
+                  type="text"
+                  value={siteName}
+                  onChange={(e) => setSiteName(e.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())}
+                  placeholder="my-site"
+                  className="flex-1 px-3.5 py-2.5 bg-transparent text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none"
+                  autoFocus
+                />
+                <span className="pr-3 text-sm text-gray-300 select-none">.vibeweb.site</span>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Password</label>
@@ -62,7 +65,7 @@ export function LoginPage() {
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
-              disabled={loading || !subdomain.trim() || !password}
+              disabled={loading || !siteName.trim() || !password}
               className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all shadow-sm"
             >
               {loading ? "Signing in..." : "Sign In"}

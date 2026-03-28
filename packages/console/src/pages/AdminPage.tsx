@@ -70,12 +70,15 @@ export function AdminPage() {
       {showCreate && (
         <form onSubmit={handleCreate} className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50 flex gap-3 items-end">
           <div className="flex-1">
-            <label className="block text-xs font-medium mb-1 text-gray-500">Subdomain</label>
-            <input value={subdomain} onChange={(e) => setSubdomain(e.target.value)} placeholder="my-site"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100" autoFocus />
+            <label className="block text-xs font-medium mb-1 text-gray-500">Site Name (URL)</label>
+            <div className="flex items-center border border-gray-200 rounded-lg bg-white focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100">
+              <input value={subdomain} onChange={(e) => setSubdomain(e.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())} placeholder="my-site"
+                className="flex-1 px-3 py-2 bg-transparent text-sm focus:outline-none" autoFocus />
+              <span className="pr-3 text-xs text-gray-300">.vibeweb.site</span>
+            </div>
           </div>
           <div className="flex-1">
-            <label className="block text-xs font-medium mb-1 text-gray-500">Name</label>
+            <label className="block text-xs font-medium mb-1 text-gray-500">Display Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Site"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
           </div>
@@ -324,16 +327,16 @@ function TenantCreatedBanner({ subdomain, initialPassword, onDismiss }: { subdom
         </div>
         <button onClick={onDismiss} className="text-xs text-gray-400 hover:text-gray-600">Dismiss</button>
       </div>
-      <p className="text-xs text-emerald-700 mb-3">Save this password. It won't be shown again.</p>
+      <p className="text-xs text-emerald-700 mb-3">Share these login credentials with the site owner. The password won't be shown again.</p>
       <div className="space-y-2">
         <div className="flex gap-2 items-center">
-          <span className="text-xs text-gray-500 w-24 shrink-0">Subdomain</span>
+          <span className="text-xs text-gray-500 w-24 shrink-0">Site Name</span>
           <code className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-md text-xs font-mono text-gray-800 select-all">
             {subdomain}
           </code>
         </div>
         <div className="flex gap-2 items-center">
-          <span className="text-xs text-gray-500 w-24 shrink-0">Initial Password</span>
+          <span className="text-xs text-gray-500 w-24 shrink-0">Password</span>
           <code className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-md text-xs font-mono text-gray-800 break-all select-all">
             {initialPassword}
           </code>

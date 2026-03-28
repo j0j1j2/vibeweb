@@ -2,23 +2,26 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { listFiles } from "@/api";
 import { useChatContext } from "@/components/ChatLayout";
-import { FileText, RefreshCw, ExternalLink } from "lucide-react";
+import { FileText, RefreshCw, ExternalLink, Sparkles } from "lucide-react";
 
 export function PreviewPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const { subdomain } = useChatContext();
   const [pages, setPages] = useState<{ name: string; path: string }[]>([]);
   const [selectedPage, setSelectedPage] = useState("index.html");
+  const [hasContent, setHasContent] = useState<boolean | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (!tenantId) return;
     listFiles(tenantId).then((data) => {
-      const htmlPages = (data.files ?? [])
+      const files = data.files ?? [];
+      const htmlPages = files
         .filter((f: { path: string }) => f.path.startsWith("public/") && f.path.endsWith(".html"))
         .map((f: { path: string }) => ({ name: f.path.replace("public/", ""), path: f.path }));
       setPages(htmlPages);
-    }).catch(() => {});
+      setHasContent(files.length > 0);
+    }).catch(() => setHasContent(false));
   }, [tenantId]);
 
   const previewUrl = subdomain
@@ -28,6 +31,24 @@ export function PreviewPage() {
   const handleRefresh = () => { if (iframeRef.current && previewUrl) iframeRef.current.src = previewUrl; };
 
   if (!subdomain) return <div className="flex items-center justify-center h-full text-gray-300">Loading...</div>;
+
+  // New site with no content — show welcome screen
+  if (hasContent === false) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center px-8">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mb-6 shadow-lg shadow-violet-500/20">
+          <Sparkles className="w-8 h-8 text-white" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Welcome to your site!</h2>
+        <p className="text-gray-400 max-w-md mb-1">
+          Start by telling the AI what you'd like to build.
+        </p>
+        <p className="text-gray-300 text-sm max-w-md">
+          Try something like: "Create a landing page for a coffee shop with a menu and contact section"
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -50,7 +71,6 @@ export function PreviewPage() {
                 <span className="truncate">{p.name}</span>
               </button>
             ))}
-            {pages.length === 0 && <div className="px-2 text-[12px] text-gray-300">No pages</div>}
           </div>
         </div>
       )}
@@ -60,7 +80,7 @@ export function PreviewPage() {
         <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-2">
           <div className="flex-1 flex items-center gap-2 px-2.5 py-1 bg-gray-50 rounded-md border border-gray-100">
             <div className="w-2 h-2 rounded-full bg-emerald-400/80" />
-            <span className="text-[11px] text-gray-400 font-mono truncate">{previewUrl}</span>
+            <span className="text-[11px] text-gray-400 font-mono truncate">{subdomain}.vibeweb.site</span>
           </div>
           <button onClick={handleRefresh} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
             <RefreshCw className="w-3.5 h-3.5" />
