@@ -107,9 +107,13 @@ export function DbExplorer({ tenantId: propTenantId }: { tenantId?: string }) {
             </div>
           )}
           {!result && !error && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-2">
+            <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-2 px-6 text-center">
               <Table2 className="w-8 h-8" />
-              <p className="text-sm">{tables.length > 0 ? "Click a table or run a query" : "No tables yet"}</p>
+              {tables.length > 0 ? (
+                <p className="text-sm">Click a table or run a query</p>
+              ) : (
+                <p className="text-sm">No tables yet. Use the chat to create your first database table.</p>
+              )}
             </div>
           )}
         </div>

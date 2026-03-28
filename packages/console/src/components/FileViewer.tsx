@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { readFile, deleteFile } from "@/api";
-import { FileCode, Download, Trash2, Image, FileText } from "lucide-react";
+import { readFile, deleteFile, uploadFile } from "@/api";
+import { FileCode, Download, Trash2, Image, FileText, Pencil, X } from "lucide-react";
 
 const LANG_MAP: Record<string, string> = {
   html: "HTML", htm: "HTML", xml: "XML", svg: "SVG",
@@ -80,6 +80,9 @@ export function FileViewer({
   const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState<string>("");
+  const [saving, setSaving] = useState(false);
 
   const ext = (filePath.split(".").pop() ?? "").toLowerCase();
   const isImage = IMAGE_EXTS.has(ext);
@@ -111,6 +114,30 @@ export function FileViewer({
     URL.revokeObjectURL(url);
   };
 
+  const handleEdit = () => {
+    setEditContent(content);
+    setEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditContent("");
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await uploadFile(tenantId, filePath, editContent);
+      setContent(editContent);
+      setEditing(false);
+      setEditContent("");
+    } catch {
+      alert("Failed to save file");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm(`Delete ${filePath}?`)) return;
     setDeleting(true);
@@ -130,12 +157,30 @@ export function FileViewer({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-[11px] text-gray-400 uppercase font-medium tracking-wider bg-gray-50 px-2 py-0.5 rounded">{label}</span>
-          <button onClick={handleDownload} title="Download" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-            <Download className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={handleDelete} disabled={deleting} title="Delete" className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {editing ? (
+            <>
+              <button onClick={handleSave} disabled={saving} className="px-2 py-0.5 rounded text-[12px] font-medium bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50 transition-colors">
+                {saving ? "Saving…" : "Save"}
+              </button>
+              <button onClick={handleCancelEdit} disabled={saving} title="Cancel" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <>
+              {!isImage && (
+                <button onClick={handleEdit} title="Edit" className="p-1 rounded text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button onClick={handleDownload} title="Download" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                <Download className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={handleDelete} disabled={deleting} title="Delete" className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-auto">
@@ -145,6 +190,13 @@ export function FileViewer({
           <div className="flex items-center justify-center h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZjBmMGYwIi8+PHJlY3QgeD0iMTAiIHk9IjEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9IiNmMGYwZjAiLz48L3N2Zz4=')] p-8">
             <img src={`/api/tenants/${tenantId}/files/${filePath}`} alt={filePath.split("/").pop() ?? ""} className="max-w-full max-h-full object-contain rounded shadow-lg" />
           </div>
+        ) : editing ? (
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            className="w-full h-full resize-none font-mono text-[13px] text-gray-700 p-4 focus:outline-none bg-white leading-relaxed"
+            spellCheck={false}
+          />
         ) : (
           <div className="flex text-[13px] font-mono leading-relaxed">
             <div className="py-3 px-3 text-right text-gray-300 select-none border-r border-gray-100 bg-gray-50/50 flex-shrink-0 text-[12px]">

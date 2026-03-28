@@ -16,7 +16,7 @@ export function Sidebar({ tenants }: { tenants: TenantNav[] }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => tenantId ? { [tenantId]: true } : {});
 
   const toggleExpand = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/");
 
   return (
     <div className="w-[260px] h-screen bg-white border-r border-gray-200 flex flex-col">
