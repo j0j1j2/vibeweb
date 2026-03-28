@@ -16,10 +16,19 @@ function AppLayout() {
   const { auth } = useAuth();
   const [tenants, setTenants] = useState<{ id: string; name: string; subdomain: string }[]>([]);
 
-  useEffect(() => {
+  const refreshTenants = () => {
     if (!auth) return;
     if (auth.isAdmin) { listTenants().then(setTenants).catch(() => {}); }
     else if (auth.tenant) { setTenants([{ id: auth.tenant.id, name: auth.tenant.name, subdomain: auth.tenant.subdomain }]); }
+  };
+
+  useEffect(() => { refreshTenants(); }, [auth]);
+
+  // Listen for tenant changes from any page
+  useEffect(() => {
+    const handler = () => refreshTenants();
+    window.addEventListener("vibeweb:tenants-changed", handler);
+    return () => window.removeEventListener("vibeweb:tenants-changed", handler);
   }, [auth]);
 
   if (!auth) return <Navigate to="/login" />;

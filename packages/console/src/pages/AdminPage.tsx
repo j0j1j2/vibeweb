@@ -31,6 +31,8 @@ export function AdminPage() {
       } catch { statuses[t.id] = { connected: false }; }
     }));
     setClaudeStatuses(statuses);
+    // Notify sidebar to refresh
+    window.dispatchEvent(new Event("vibeweb:tenants-changed"));
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
