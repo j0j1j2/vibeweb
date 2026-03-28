@@ -14,9 +14,10 @@ interface Message {
 interface ChatContextValue {
   subdomain: string;
   connected: boolean;
+  sendMessage: (content: string) => void;
 }
 
-const ChatContext = createContext<ChatContextValue>({ subdomain: "", connected: false });
+const ChatContext = createContext<ChatContextValue>({ subdomain: "", connected: false, sendMessage: () => {} });
 
 export function useChatContext() {
   return useContext(ChatContext);
@@ -145,7 +146,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <ChatContext.Provider value={{ subdomain, connected }}>
+    <ChatContext.Provider value={{ subdomain, connected, sendMessage: handleSend }}>
       <div className="flex h-full">
         <div className="flex-1 min-w-0 overflow-hidden">
           {children}
