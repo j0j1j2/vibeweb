@@ -39,9 +39,10 @@ export function LoginPage() {
           <p className="text-gray-400 text-sm mb-5">Sign in to manage your site</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Site Name</label>
+              <label htmlFor="siteName" className="block text-xs font-medium text-gray-500 mb-1">Site Name</label>
               <div className="flex items-center border border-gray-200 rounded-lg bg-gray-50 focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-colors">
                 <input
+                  id="siteName"
                   type="text"
                   value={siteName}
                   onChange={(e) => setSiteName(e.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())}
@@ -53,8 +54,9 @@ export function LoginPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Password</label>
+              <label htmlFor="password" className="block text-xs font-medium text-gray-500 mb-1">Password</label>
               <input
+                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -63,7 +65,7 @@ export function LoginPage() {
               />
             </div>
             {error && (
-              <div className="flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+              <div role="alert" className="flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-700 text-sm font-medium">{error}</p>
               </div>
             )}

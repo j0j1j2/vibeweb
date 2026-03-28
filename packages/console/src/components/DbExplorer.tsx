@@ -76,14 +76,16 @@ export function DbExplorer({ tenantId: propTenantId }: { tenantId?: string }) {
         <div className="p-3 border-b border-gray-100">
           <div className="flex gap-2">
             <textarea
+              id="sqlQuery"
               value={sql}
               onChange={(e) => setSql(e.target.value)}
               onKeyDown={handleKeyDown}
               className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-[13px] font-mono text-gray-700 placeholder:text-gray-300 placeholder:leading-normal resize-none focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
               rows={3}
               placeholder={"SELECT * FROM ...\n(Ctrl+Enter to run)"}
+              aria-label="SQL query"
             />
-            <button onClick={() => runQuery()} disabled={loading || !sql.trim()}
+            <button onClick={() => runQuery()} disabled={loading || !sql.trim()} aria-label="Run query"
               className="px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-500 disabled:opacity-30 self-end transition-colors">
               <Play className="w-4 h-4" />
             </button>

@@ -77,16 +77,16 @@ export function AdminPage() {
       {showCreate && (
         <form onSubmit={handleCreate} className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50 flex gap-3 items-end">
           <div className="flex-1">
-            <label className="block text-xs font-medium mb-1 text-gray-500">Site Name (URL)</label>
+            <label htmlFor="tenantSubdomain" className="block text-xs font-medium mb-1 text-gray-500">Site Name (URL)</label>
             <div className="flex items-center border border-gray-200 rounded-lg bg-white focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100">
-              <input value={subdomain} onChange={(e) => setSubdomain(e.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())} placeholder="my-site"
+              <input id="tenantSubdomain" value={subdomain} onChange={(e) => setSubdomain(e.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())} placeholder="my-site"
                 className="flex-1 px-3 py-2 bg-transparent text-sm focus:outline-none" autoFocus />
               <span className="pr-3 text-xs text-gray-300">.vibeweb.site</span>
             </div>
           </div>
           <div className="flex-1">
-            <label className="block text-xs font-medium mb-1 text-gray-500">Display Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Site"
+            <label htmlFor="tenantName" className="block text-xs font-medium mb-1 text-gray-500">Display Name</label>
+            <input id="tenantName" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Site"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
           </div>
           <button type="submit" disabled={creating || !subdomain.trim() || !name.trim()}
@@ -327,9 +327,10 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, confirmingDel
                       </a>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-700 mb-1.5">Step 2: Paste the authentication code</p>
+                      <label htmlFor={`authCode-${tenant.id}`} className="text-sm font-medium text-gray-700 mb-1.5 block">Step 2: Paste the authentication code</label>
                       <div className="flex gap-2">
                         <input
+                          id={`authCode-${tenant.id}`}
                           value={codeInput}
                           onChange={(e) => setCodeInput(e.target.value)}
                           placeholder="Paste code from callback page..."

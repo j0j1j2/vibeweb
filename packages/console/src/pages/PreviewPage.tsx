@@ -106,6 +106,7 @@ export function PreviewPage() {
               <button
                 onClick={() => handleEditPage(p.name)}
                 title="Edit this page"
+                aria-label={`Edit ${p.name === "index.html" ? "Home" : p.name.replace(".html", "")} page`}
                 className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-violet-600 transition-all"
               >
                 <Pencil className="w-3 h-3" />
@@ -164,10 +165,10 @@ export function PreviewPage() {
               {subdomain}.vibeweb.site/{selectedPage === "index.html" ? "" : selectedPage}
             </span>
           </div>
-          <button onClick={() => { if (iframeRef.current) iframeRef.current.src = previewUrl; fetchPages(); }} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={() => { if (iframeRef.current) iframeRef.current.src = previewUrl; fetchPages(); }} aria-label="Refresh preview" className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
-          <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+          <a href={previewUrl} target="_blank" rel="noopener noreferrer" aria-label="Open in new tab" className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>

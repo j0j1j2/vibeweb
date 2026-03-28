@@ -91,8 +91,9 @@ export function SettingsPage() {
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Change Password</h2>
         <form onSubmit={handleChangePassword} className="space-y-3 max-w-sm">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Current Password</label>
+            <label htmlFor="currentPassword" className="block text-xs font-medium text-gray-500 mb-1">Current Password</label>
             <input
+              id="currentPassword"
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
@@ -101,8 +102,9 @@ export function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">New Password</label>
+            <label htmlFor="newPassword" className="block text-xs font-medium text-gray-500 mb-1">New Password</label>
             <input
+              id="newPassword"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -111,8 +113,9 @@ export function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Confirm New Password</label>
+            <label htmlFor="confirmPassword" className="block text-xs font-medium text-gray-500 mb-1">Confirm New Password</label>
             <input
+              id="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

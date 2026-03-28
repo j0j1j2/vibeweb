@@ -79,10 +79,13 @@ export function FileViewer({
 }) {
   const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const ext = (filePath.split(".").pop() ?? "").toLowerCase();
@@ -92,9 +95,10 @@ export function FileViewer({
   useEffect(() => {
     if (isImage) { setLoading(false); return; }
     setLoading(true);
+    setLoadError(false);
     readFile(tenantId, filePath)
       .then(setContent)
-      .catch(() => setContent("Failed to load file"))
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, [tenantId, filePath, isImage]);
 
@@ -127,13 +131,14 @@ export function FileViewer({
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError("");
     try {
       await uploadFile(tenantId, filePath, editContent);
       setContent(editContent);
       setEditing(false);
       setEditContent("");
     } catch {
-      alert("Failed to save file");
+      setSaveError("Failed to save file");
     } finally {
       setSaving(false);
     }
@@ -141,8 +146,9 @@ export function FileViewer({
 
   const handleDelete = async () => {
     setDeleting(true);
+    setDeleteError("");
     try { await deleteFile(tenantId, filePath); onDeleted?.(); }
-    catch { setShowDeleteConfirm(false); }
+    catch { setDeleteError("Failed to delete file"); setShowDeleteConfirm(false); }
     finally { setDeleting(false); }
   };
 
@@ -157,12 +163,14 @@ export function FileViewer({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-[11px] text-gray-400 uppercase font-medium tracking-wider bg-gray-50 px-2 py-0.5 rounded">{label}</span>
+          {saveError && <span className="text-[11px] text-red-500">{saveError}</span>}
+          {deleteError && <span className="text-[11px] text-red-500">{deleteError}</span>}
           {editing ? (
             <>
               <button onClick={handleSave} disabled={saving} className="px-2 py-0.5 rounded text-[12px] font-medium bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50 transition-colors">
                 {saving ? "Saving…" : "Save"}
               </button>
-              <button onClick={handleCancelEdit} disabled={saving} title="Cancel" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50">
+              <button onClick={handleCancelEdit} disabled={saving} title="Cancel" aria-label="Cancel edit" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50">
                 <X className="w-3.5 h-3.5" />
               </button>
             </>
@@ -175,14 +183,14 @@ export function FileViewer({
           ) : (
             <>
               {!isImage && (
-                <button onClick={handleEdit} title="Edit" className="p-1 rounded text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+                <button onClick={handleEdit} title="Edit file" aria-label="Edit file" className="p-1 rounded text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
               )}
-              <button onClick={handleDownload} title="Download" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+              <button onClick={handleDownload} title="Download file" aria-label="Download file" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
                 <Download className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => setShowDeleteConfirm(true)} title="Delete" className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <button onClick={() => setShowDeleteConfirm(true)} title="Delete file" aria-label="Delete file" className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </>
@@ -192,6 +200,23 @@ export function FileViewer({
       <div className="flex-1 overflow-auto">
         {loading ? (
           <div className="p-4 text-sm text-gray-300">Loading...</div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
+            <p className="text-sm text-red-500 font-medium">Failed to load file</p>
+            <button
+              onClick={() => {
+                setLoadError(false);
+                setLoading(true);
+                readFile(tenantId, filePath)
+                  .then(setContent)
+                  .catch(() => setLoadError(true))
+                  .finally(() => setLoading(false));
+              }}
+              className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         ) : isImage ? (
           <div className="flex items-center justify-center h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZjBmMGYwIi8+PHJlY3QgeD0iMTAiIHk9IjEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9IiNmMGYwZjAiLz48L3N2Zz4=')] p-8">
             <img src={`/api/tenants/${tenantId}/files/${filePath}`} alt={filePath.split("/").pop() ?? ""} className="max-w-full max-h-full object-contain rounded shadow-lg" />

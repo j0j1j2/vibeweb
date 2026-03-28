@@ -33,7 +33,7 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSend(); }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   return (
@@ -66,12 +66,23 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
               )}
               {msg.toolUse && msg.toolUse.length > 0 && (
                 <div className="mt-2 space-y-1">
-                  {msg.toolUse.map((t, j) => (
-                    <div key={j} className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md bg-gray-100 text-gray-500 font-mono border border-gray-200">
-                      <Wrench className="w-3 h-3" />
-                      {t.tool}{t.path ? ` ${t.path}` : ""}
-                    </div>
-                  ))}
+                  {msg.toolUse.map((t, j) => {
+                    const friendlyToolNames: Record<string, string> = {
+                      Write: "Updating file",
+                      Edit: "Editing file",
+                      Read: "Reading file",
+                      Bash: "Running command",
+                      Glob: "Searching files",
+                      Grep: "Searching content",
+                    };
+                    const displayName = friendlyToolNames[t.tool] || t.tool;
+                    return (
+                      <div key={j} className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md bg-gray-100 text-gray-500 font-mono border border-gray-200">
+                        <Wrench className="w-3 h-3" />
+                        {displayName}{t.path ? ` ${t.path}` : ""}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -119,7 +130,7 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={connected ? "Message... (Ctrl+Enter)" : "Connecting..."}
+            placeholder={connected ? "Message... (Shift+Enter for newline)" : "Connecting..."}
             disabled={!connected}
             className="w-full px-3 py-2.5 pr-12 bg-white border border-gray-200 rounded-lg text-[13px] text-gray-800 placeholder:text-gray-300 resize-none focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
             rows={3}
@@ -127,6 +138,7 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
           <button
             onClick={handleSend}
             disabled={!input.trim() || !connected || loading}
+            aria-label="Send message"
             className="absolute right-2 bottom-2 p-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-30 transition-colors"
           >
             <Send className="w-3.5 h-3.5" />

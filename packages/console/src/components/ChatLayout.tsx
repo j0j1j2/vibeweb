@@ -158,6 +158,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
               onClick={() => setCollapsed(false)}
               className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-violet-600 transition-colors"
               title="Open chat"
+              aria-label="Open chat"
             >
               <PanelRightOpen className="w-4 h-4" />
             </button>
@@ -169,6 +170,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
               onClick={() => setCollapsed(true)}
               className="absolute top-3 right-3 z-10 p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
               title="Collapse chat"
+              aria-label="Collapse chat"
             >
               <PanelRightClose className="w-4 h-4" />
             </button>
