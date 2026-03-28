@@ -4,12 +4,10 @@ interface Tenant {
   id: string;
   subdomain: string;
   name: string;
-  api_key: string;
   status: string;
 }
 
 interface AuthState {
-  apiKey: string;
   tenant: Tenant | null;
   isAdmin: boolean;
 }
@@ -17,7 +15,6 @@ interface AuthState {
 interface AuthContextValue {
   auth: AuthState | null;
   login: (subdomain: string, password: string) => Promise<boolean>;
-  loginAdmin: (apiKey: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -41,31 +38,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (subdomain: string, password: string): Promise<boolean> => {
     try {
-      const loginRes = await fetch("/api/auth/login", {
+      // "console" subdomain = admin login
+      if (subdomain === "console") {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: password }),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (data.admin) {
+          saveAuth({ tenant: null, isAdmin: true });
+          setAuth({ tenant: null, isAdmin: true });
+          return true;
+        }
+        return false;
+      }
+
+      // Tenant login
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subdomain, password }),
       });
-      if (!loginRes.ok) return false;
-      const data = await loginRes.json();
-      const state: AuthState = { apiKey: "", tenant: data, isAdmin: false };
-      saveAuth(state);
-      setAuth(state);
-      return true;
-    } catch { return false; }
-  }, []);
-
-  const loginAdmin = useCallback(async (apiKey: string): Promise<boolean> => {
-    try {
-      const loginRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: apiKey }),
-      });
-      if (!loginRes.ok) return false;
-      const data = await loginRes.json();
-      if (data.admin) {
-        const state: AuthState = { apiKey, tenant: null, isAdmin: true };
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.id) {
+        const state: AuthState = { tenant: data, isAdmin: false };
         saveAuth(state);
         setAuth(state);
         return true;
@@ -76,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => { saveAuth(null); setAuth(null); }, []);
 
-  return <AuthContext.Provider value={{ auth, login, loginAdmin, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ auth, login, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {
