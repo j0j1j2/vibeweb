@@ -48,9 +48,10 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
       Cmd: ["sh", "-c", `
-        mkdir -p /data/tenants/${tenantId}/claude-auth &&
-        rm -f /root/.claude && ln -s /data/tenants/${tenantId}/claude-auth /root/.claude &&
-        claude setup-token
+        mkdir -p /data/tenants/${tenantId}/claude-auth /home/vibe/.claude &&
+        cp -a /data/tenants/${tenantId}/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
+        chown -R vibe:vibe /home/vibe /data/tenants/${tenantId}/claude-auth 2>/dev/null;
+        exec su vibe -c "HOME=/home/vibe claude setup-token"
       `],
       Env: [`HOME=/root`],
       HostConfig: {
@@ -94,6 +95,20 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
     // Store container + stream for code submission
     loginContainers.set(tenantId, { container, stream });
 
+    // Monitor stream for token output (setup-token prints sk-ant-oat... after code exchange)
+    stream.on("data", (chunk: Buffer) => {
+      const text = chunk.toString().replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n]/g, "");
+      const tokenMatch = text.match(/(sk-ant-oat[A-Za-z0-9_-]{20,})/);
+      if (tokenMatch) {
+        const token = tokenMatch[1];
+        const authDir = path.join(tenantsDir, tenantId, "claude-auth");
+        fs.mkdirSync(authDir, { recursive: true });
+        fs.writeFileSync(path.join(authDir, "oauth-token"), token);
+        fs.writeFileSync(path.join(authDir, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
+        app.log.info(`Token captured and saved for tenant ${tenantId}: ${token.substring(0, 20)}...`);
+      }
+    });
+
     // Auto-cleanup after 5 minutes
     setTimeout(async () => {
       if (loginContainers.has(tenantId)) {
@@ -116,69 +131,48 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
   }
 });
 
-// POST /auth/claude/:tenantId/code - Exchange auth code via setup-token in container
+// POST /auth/claude/:tenantId/code - Send auth code to the running setup-token container
 app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude/:tenantId/code", async (req, reply) => {
   const { tenantId } = req.params;
   const { code } = req.body;
   if (!code) return reply.status(400).send({ error: "code is required" });
 
-  const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
-  const networkName = process.env.DOCKER_NETWORK ?? "vibeweb_default";
+  const entry = loginContainers.get(tenantId);
+  if (!entry) {
+    return reply.status(404).send({ error: "No active login session. Click Connect first." });
+  }
 
   try {
-    app.log.info(`Exchanging auth code for tenant ${tenantId}`);
+    // Send code to the SAME container that generated the OAuth URL (same PKCE session)
+    // TTY mode needs \r as Enter
+    app.log.info(`Sending auth code to setup-token for tenant ${tenantId}: ${code.substring(0, 20)}...`);
+    entry.stream.write(code + "\r");
 
-    // Run setup-token in container, pipe the code via stdin
-    // The code format is: {authCode}#{state} — must be sent as-is
-    const container = await docker.createContainer({
-      Image: SESSION_IMAGE,
-      Cmd: ["sh", "-c", `
-        mkdir -p /data/tenants/${tenantId}/claude-auth &&
-        rm -f /home/vibe/.claude && ln -s /data/tenants/${tenantId}/claude-auth /home/vibe/.claude &&
-        echo '${code.replace(/'/g, "'\\''")}' | su vibe -c "HOME=/home/vibe claude setup-token"
-      `],
-      Env: [`HOME=/root`],
-      HostConfig: {
-        Mounts: [{ Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false }],
-        NetworkMode: networkName,
-      },
-      Labels: { "vibeweb.role": "auth-code-exchange", "vibeweb.tenant": tenantId },
-      Tty: false,
-    });
-
-    await container.start();
-
-    // Wait for completion (max 60s)
+    // Wait for container to exit (setup-token completes after code exchange)
     await Promise.race([
-      container.wait(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 60000)),
+      entry.container.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout waiting for token exchange")), 60000)),
     ]);
 
-    // Check logs for token
-    const logs = (await container.logs({ stdout: true, stderr: true })).toString();
-    await container.remove().catch(() => {});
+    loginContainers.delete(tenantId);
 
-    // Check if token was saved
+    // Check if credentials were saved
     const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
-    const hasCredentials = checkCredentials(claudeAuthDir);
 
-    // Also create .claude.json if not exists
+    // Create .claude.json if not exists
     const claudeJsonPath = path.join(claudeAuthDir, ".claude.json");
     if (!fs.existsSync(claudeJsonPath)) {
+      fs.mkdirSync(claudeAuthDir, { recursive: true });
       fs.writeFileSync(claudeJsonPath, JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
     }
 
+    const hasCredentials = checkCredentials(claudeAuthDir);
     app.log.info(`Auth code exchange for ${tenantId}: credentials=${hasCredentials}`);
-
-    if (!hasCredentials) {
-      // Log last part of output for debugging
-      const cleanLogs = logs.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n]/g, "");
-      app.log.error(`Exchange failed. Logs: ${cleanLogs.substring(cleanLogs.length - 300)}`);
-    }
 
     return { success: hasCredentials };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to exchange code";
+    loginContainers.delete(tenantId);
     app.log.error(`Code exchange error: ${message}`);
     return reply.status(500).send({ error: message });
   }

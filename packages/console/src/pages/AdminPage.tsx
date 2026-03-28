@@ -153,16 +153,28 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
   onRefresh: () => void;
 }) {
   const claudeConnected = claudeStatus?.connected ?? false;
+  const [oauthUrl, setOauthUrl] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState("");
+  const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  const handleStartLogin = async () => {
+    setStarting(true); setSubmitError(""); setOauthUrl(null);
+    try {
+      const res = await fetch(`/agent-api/auth/claude/${tenant.id}/login`, { method: "POST" });
+      const data = await res.json();
+      if (data.url) setOauthUrl(data.url);
+      else setSubmitError(data.error || "Failed to start login");
+    } catch { setSubmitError("Failed to start login"); }
+    finally { setStarting(false); }
+  };
 
   const handleSubmitCode = async () => {
     const input = codeInput.trim();
     if (!input) return;
     setSubmitting(true); setSubmitError("");
     try {
-      // If it's a token (sk-ant-oat...), save directly. Otherwise treat as auth code.
       const isToken = input.startsWith("sk-ant-");
       const url = isToken
         ? `/agent-api/auth/claude/${tenant.id}/token`
@@ -175,8 +187,8 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.success) { setCodeInput(""); onRefresh(); }
-      else setSubmitError(data.error || "Failed. Make sure the code is correct.");
+      if (data.success) { setCodeInput(""); setOauthUrl(null); onRefresh(); }
+      else setSubmitError(data.error || "Failed. Make sure the full code was copied.");
     } catch { setSubmitError("Failed to connect"); }
     finally { setSubmitting(false); }
   };
@@ -248,27 +260,43 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
               </div>
             ) : (
               <div className="space-y-4 max-w-xl">
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-1">Connect Claude Account</p>
-                  <ol className="text-xs text-gray-400 mb-3 space-y-1 list-decimal list-inside">
-                    <li>Run <code className="px-1.5 py-0.5 bg-gray-100 rounded text-violet-600">claude setup-token</code> in your terminal</li>
-                    <li>Open the URL and authorize</li>
-                    <li>Copy the authentication code and paste it below</li>
-                  </ol>
-                  <div className="flex gap-2">
-                    <input
-                      value={codeInput}
-                      onChange={(e) => setCodeInput(e.target.value)}
-                      placeholder="Paste authentication code or token..."
-                      className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                    />
-                    <button onClick={handleSubmitCode} disabled={submitting || !codeInput.trim()}
-                      className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40 whitespace-nowrap">
-                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Connect"}
+                {!oauthUrl ? (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-3">Connect a Claude account to enable the vibe editor for this tenant.</p>
+                    <button onClick={handleStartLogin} disabled={starting}
+                      className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40">
+                      {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {starting ? "Starting..." : "Connect Claude Account"}
                     </button>
                   </div>
-                  {submitError && <p className="mt-1 text-sm text-red-500">{submitError}</p>}
-                </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-1.5">Step 1: Open and authorize</p>
+                      <a href={oauthUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm text-violet-600 hover:underline break-all">
+                        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />Open authorization page
+                      </a>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-1.5">Step 2: Paste the authentication code</p>
+                      <div className="flex gap-2">
+                        <input
+                          value={codeInput}
+                          onChange={(e) => setCodeInput(e.target.value)}
+                          placeholder="Paste code from callback page..."
+                          className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                          autoFocus
+                        />
+                        <button onClick={handleSubmitCode} disabled={submitting || !codeInput.trim()}
+                          className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40 whitespace-nowrap">
+                          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Connect"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {submitError && <p className="mt-1 text-sm text-red-500">{submitError}</p>}
               </div>
             )}
           </td>
