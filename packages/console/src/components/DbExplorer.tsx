@@ -52,7 +52,7 @@ export function DbExplorer({ tenantId: propTenantId }: { tenantId?: string }) {
   return (
     <div className="flex h-full">
       {/* Table list sidebar */}
-      <div className="w-[180px] border-r border-gray-100 bg-gray-50/30 overflow-y-auto flex-shrink-0">
+      <div className="w-[140px] border-r border-gray-100 bg-gray-50/30 overflow-y-auto flex-shrink-0">
         <div className="px-3 py-3">
           <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Tables</div>
           {tables.map((t) => (
@@ -78,9 +78,9 @@ export function DbExplorer({ tenantId: propTenantId }: { tenantId?: string }) {
               value={sql}
               onChange={(e) => setSql(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-[13px] font-mono text-gray-700 placeholder:text-gray-300 resize-none focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
+              className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-[13px] font-mono text-gray-700 placeholder:text-gray-300 placeholder:leading-normal resize-none focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
               rows={3}
-              placeholder="SELECT * FROM ... (Ctrl+Enter to run)"
+              placeholder={"SELECT * FROM ...\n(Ctrl+Enter to run)"}
             />
             <button onClick={() => runQuery()} disabled={loading || !sql.trim()}
               className="px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-500 disabled:opacity-30 self-end transition-colors">

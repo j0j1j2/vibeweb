@@ -90,14 +90,14 @@ export function AdminPage() {
 
       {/* Tenant list with Claude connection management */}
       <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Subdomain</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Claude</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 w-[22%]">Name</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 w-[18%]">Subdomain</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 w-[20%]">Claude</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 w-[12%]">Status</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600 w-[28%]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -207,7 +207,7 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
   return (
     <>
       <tr className="border-t border-gray-100 hover:bg-gray-50/50">
-        <td className="px-4 py-3 font-medium text-gray-900">{tenant.name}</td>
+        <td className="px-4 py-3 font-medium text-gray-900 max-w-0"><span className="block truncate" title={tenant.name}>{tenant.name}</span></td>
         <td className="px-4 py-3 text-gray-500 font-mono text-xs">{tenant.subdomain}</td>
         <td className="px-4 py-3">
           <button onClick={onToggleAuth} className="flex items-center gap-1.5">
@@ -223,19 +223,21 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
             tenant.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"
           }`}>{tenant.status}</span>
         </td>
-        <td className="px-4 py-3 text-right space-x-1">
-          <Link to={`/t/${tenant.id}/preview`}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors">
-            <ExternalLink className="w-3 h-3" /> Open
-          </Link>
-          <button onClick={onResetKey}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors">
-            <Key className="w-3 h-3" /> Reset Key
-          </button>
-          <button onClick={onDelete}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
-            <Trash2 className="w-3 h-3" /> Delete
-          </button>
+        <td className="px-4 py-3 text-right whitespace-nowrap">
+          <div className="inline-flex items-center gap-1 flex-wrap justify-end">
+            <Link to={`/t/${tenant.id}/preview`}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors whitespace-nowrap">
+              <ExternalLink className="w-3 h-3" /> Open
+            </Link>
+            <button onClick={onResetKey}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors whitespace-nowrap">
+              <Key className="w-3 h-3" /> Reset Key
+            </button>
+            <button onClick={onDelete}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors whitespace-nowrap">
+              <Trash2 className="w-3 h-3" /> Delete
+            </button>
+          </div>
         </td>
       </tr>
 

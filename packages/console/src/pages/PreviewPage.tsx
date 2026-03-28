@@ -31,27 +31,29 @@ export function PreviewPage() {
 
   return (
     <div className="flex h-full">
-      {/* Page list */}
-      <div className="w-[180px] border-r border-gray-100 bg-gray-50/30 overflow-y-auto flex-shrink-0">
-        <div className="px-3 py-3">
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Pages</div>
-          {pages.map((p) => (
-            <button
-              key={p.path}
-              onClick={() => setSelectedPage(p.name)}
-              className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-[13px] text-left transition-colors ${
-                selectedPage === p.name
-                  ? "bg-violet-50 text-violet-700 font-medium"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span className="truncate">{p.name}</span>
-            </button>
-          ))}
-          {pages.length === 0 && <div className="px-2 text-[12px] text-gray-300">No pages</div>}
+      {/* Page list — hidden when only 1 page */}
+      {pages.length !== 1 && (
+        <div className="w-[140px] border-r border-gray-100 bg-gray-50/30 overflow-y-auto flex-shrink-0">
+          <div className="px-3 py-3">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Pages</div>
+            {pages.map((p) => (
+              <button
+                key={p.path}
+                onClick={() => setSelectedPage(p.name)}
+                className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-[13px] text-left transition-colors ${
+                  selectedPage === p.name
+                    ? "bg-violet-50 text-violet-700 font-medium"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate">{p.name}</span>
+              </button>
+            ))}
+            {pages.length === 0 && <div className="px-2 text-[12px] text-gray-300">No pages</div>}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Preview */}
       <div className="flex-1 flex flex-col min-w-0">

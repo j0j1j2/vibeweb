@@ -49,7 +49,7 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading || !apiKey.trim()}
-              className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 transition-all shadow-sm"
+              className="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 disabled:border disabled:border-violet-300/50 transition-all shadow-sm"
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>

@@ -19,7 +19,7 @@ export function Sidebar({ tenants }: { tenants: TenantNav[] }) {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="w-[240px] h-screen bg-white border-r border-gray-200 flex flex-col">
+    <div className="w-[260px] h-screen bg-white border-r border-gray-200 flex flex-col">
       <div className="px-5 py-4 flex items-center gap-2.5 border-b border-gray-100">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
           <Sparkles className="w-3.5 h-3.5 text-white" />
@@ -45,9 +45,9 @@ export function Sidebar({ tenants }: { tenants: TenantNav[] }) {
               onClick={() => toggleExpand(t.id)}
               className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md hover:bg-gray-50 text-left group transition-colors"
             >
-              {expanded[t.id] ? <ChevronDown className="w-3 h-3 text-gray-300" /> : <ChevronRight className="w-3 h-3 text-gray-300" />}
-              <span className="font-medium text-gray-700 truncate">{t.name}</span>
-              <span className="ml-auto text-[10px] text-gray-300 font-mono">{t.subdomain}</span>
+              {expanded[t.id] ? <ChevronDown className="w-3 h-3 text-gray-300 flex-shrink-0" /> : <ChevronRight className="w-3 h-3 text-gray-300 flex-shrink-0" />}
+              <span className="font-medium text-gray-700 truncate min-w-0 flex-1" title={t.name}>{t.name}</span>
+              <span className="flex-shrink-0 text-[10px] text-gray-300 font-mono truncate max-w-[80px]" title={t.subdomain}>{t.subdomain}</span>
             </button>
 
             {expanded[t.id] && (
