@@ -68,6 +68,16 @@ export async function tenantRoutes(app: FastifyInstance, opts: TenantRoutesOpts)
     return { api_key: newKey };
   });
 
+  app.post<{ Params: { id: string } }>("/tenants/:id/reset-password", async (req, reply) => {
+    const tenant = db.getTenantById(req.params.id);
+    if (!tenant) return reply.status(404).send({ error: "tenant not found" });
+    const crypto = await import("node:crypto");
+    const newPassword = crypto.randomBytes(12).toString("base64url");
+    const hash = crypto.createHash("sha256").update(newPassword).digest("hex");
+    db.setPassword(req.params.id, hash);
+    return { password: newPassword, subdomain: tenant.subdomain };
+  });
+
   app.get<{ Params: { id: string } }>("/tenants/:id/status", async (req, reply) => {
     const tenant = db.getTenantById(req.params.id);
     if (!tenant) return reply.status(404).send({ error: "tenant not found" });

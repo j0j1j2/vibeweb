@@ -48,7 +48,6 @@ export function LoginPage() {
                 className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
                 autoFocus
               />
-              <p className="mt-1 text-[11px] text-gray-300">Use "console" for admin access</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Password</label>

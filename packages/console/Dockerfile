@@ -16,5 +16,5 @@ RUN pnpm build
 
 FROM nginx:alpine
 COPY --from=build /app/packages/console/dist /usr/share/nginx/html
-RUN echo 'server { listen 80; root /usr/share/nginx/html; location / { try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
+COPY configs/console-nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

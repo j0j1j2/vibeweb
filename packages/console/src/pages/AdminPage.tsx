@@ -121,10 +121,13 @@ export function AdminPage() {
                 expanded={expandedAuth === t.id}
                 onToggleAuth={() => setExpandedAuth(expandedAuth === t.id ? null : t.id)}
                 onDelete={() => handleDelete(t.id, t.name)}
-                onResetKey={async () => {
-                  if (!confirm(`Reset API key for "${t.name}"? The old key will stop working.`)) return;
-                  const result = await resetTenantApiKey(t.id);
-                  if (result?.api_key) setNewApiKey({ tenantId: t.id, key: result.api_key });
+                onResetPassword={async () => {
+                  if (!confirm(`Reset password for "${t.name}"?`)) return;
+                  const res = await fetch(`/api/tenants/${t.id}/reset-password`, { method: "POST" });
+                  const result = await res.json();
+                  if (result?.password) {
+                    setNewTenantCreds({ tenantId: t.id, subdomain: result.subdomain, initialPassword: result.password });
+                  }
                   refresh();
                 }}
                 onRefresh={refresh}
@@ -140,13 +143,13 @@ export function AdminPage() {
   );
 }
 
-function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onResetKey, onRefresh }: {
+function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onResetPassword, onRefresh }: {
   tenant: Tenant;
   claudeStatus: any;
   expanded: boolean;
   onToggleAuth: () => void;
   onDelete: () => void;
-  onResetKey: () => void;
+  onResetPassword: () => void;
   onRefresh: () => void;
 }) {
   const claudeConnected = claudeStatus?.connected ?? false;
@@ -210,9 +213,9 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors whitespace-nowrap">
               <ExternalLink className="w-3 h-3" /> Open
             </Link>
-            <button onClick={onResetKey}
+            <button onClick={onResetPassword}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors whitespace-nowrap">
-              <Key className="w-3 h-3" /> Reset Key
+              <Key className="w-3 h-3" /> Reset PW
             </button>
             <button onClick={onDelete}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors whitespace-nowrap">
