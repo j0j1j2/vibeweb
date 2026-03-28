@@ -14,6 +14,7 @@ export function AdminPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [subdomain, setSubdomain] = useState("");
   const [name, setName] = useState("");
+  const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
   const [claudeStatuses, setClaudeStatuses] = useState<Record<string, any>>({});
   const [expandedAuth, setExpandedAuth] = useState<string | null>(null);
@@ -39,16 +40,18 @@ export function AdminPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreating(true);
-    const result = await createTenant(subdomain.trim(), name.trim());
+    setCreating(true); setCreateError("");
+    const result = await createTenant(subdomain.trim().toLowerCase(), name.trim());
     setCreating(false);
+    if (result?.error) {
+      setCreateError(result.error);
+      return;
+    }
     setShowCreate(false);
     setSubdomain("");
     setName("");
     if (result?.initial_password) {
       setNewTenantCreds({ tenantId: result.id, subdomain: result.subdomain, initialPassword: result.initial_password });
-    } else if (result?.api_key) {
-      setNewApiKey({ tenantId: result.id, key: result.api_key });
     }
     refresh();
   };
@@ -88,6 +91,7 @@ export function AdminPage() {
             className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40">
             {creating ? "Creating..." : "Create"}
           </button>
+          {createError && <p className="text-sm text-red-500 self-center">{createError}</p>}
         </form>
       )}
 

@@ -66,7 +66,7 @@ export function createDb(dbPath: string): Db {
     ),
     getTenantById: db.prepare("SELECT * FROM tenants WHERE id = ?"),
     getTenantBySubdomain: db.prepare("SELECT * FROM tenants WHERE subdomain = ? AND status != 'deleted'"),
-    deleteTenant: db.prepare("UPDATE tenants SET status = 'deleted', updated_at = ? WHERE id = ?"),
+    deleteTenant: db.prepare("DELETE FROM tenants WHERE id = ?"),
     insertDeployment: db.prepare(
       "INSERT INTO deployments (id, tenant_id, deployed_at, backup_path) VALUES (?, ?, ?, ?)"
     ),
@@ -104,7 +104,7 @@ export function createDb(dbPath: string): Db {
       return stmts.getTenantBySubdomain.get(subdomain) as Tenant | undefined;
     },
     deleteTenant(id: string): void {
-      stmts.deleteTenant.run(new Date().toISOString(), id);
+      stmts.deleteTenant.run(id);
     },
     recordDeployment(tenantId: string, backupPath: string | null): Deployment {
       const id = uuidv4();

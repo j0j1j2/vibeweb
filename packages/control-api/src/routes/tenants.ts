@@ -34,6 +34,11 @@ export async function tenantRoutes(app: FastifyInstance, opts: TenantRoutesOpts)
     const tenant = db.getTenantById(req.params.id);
     if (!tenant) return reply.status(404).send({ error: "tenant not found" });
     db.deleteTenant(req.params.id);
+    // Clean up tenant files
+    const path = await import("node:path");
+    const tenantDir = path.join(tenantsDir, req.params.id);
+    const fs = await import("node:fs");
+    if (fs.existsSync(tenantDir)) fs.rmSync(tenantDir, { recursive: true, force: true });
     return reply.status(204).send();
   });
 
