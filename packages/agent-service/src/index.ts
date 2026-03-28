@@ -208,7 +208,7 @@ app.get<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/status", async
 
   const tokenFile = path.join(claudeAuthDir, "oauth-token");
   const token = fs.readFileSync(tokenFile, "utf-8").trim();
-  const tokenPrefix = token.substring(0, 20) + "..." + token.substring(token.length - 4);
+  const tokenPrefix = token.substring(0, 6) + "•".repeat(12);
 
   // Get file modification time as "connected since"
   const stat = fs.statSync(tokenFile);
@@ -225,7 +225,7 @@ app.get<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/status", async
     connected: true,
     tokenPrefix,
     connectedAt,
-    tokenType: token.startsWith("sk-ant-oat") ? "OAuth (setup-token)" : "API Key",
+    tokenType: token.startsWith("sk-ant-oat") ? "Claude OAuth" : "API Key",
     ...meta,
   };
 });

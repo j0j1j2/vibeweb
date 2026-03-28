@@ -27,7 +27,7 @@ export function SettingsPage() {
   const handleDeploy = async () => {
     if (!tenantId) return;
     setDeploying(true); setDeployMsg("");
-    try { await deployTenant(tenantId); setDeployMsg("Deployed successfully!"); getTenantStatus(tenantId).then(setStatus).catch(() => {}); }
+    try { await deployTenant(tenantId); setDeployMsg("Deployed successfully!"); setTimeout(() => setDeployMsg(""), 3000); getTenantStatus(tenantId).then(setStatus).catch(() => {}); }
     catch { setDeployMsg("Deploy failed"); }
     finally { setDeploying(false); }
   };
@@ -49,6 +49,7 @@ export function SettingsPage() {
       const result = await changePassword(tenantId, currentPassword, newPassword);
       if (result.success) {
         setPasswordMsg("Password changed successfully!");
+        setTimeout(() => setPasswordMsg(""), 3000);
         setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
       } else {
         setPasswordError(result.error || "Failed to change password");
@@ -119,7 +120,7 @@ export function SettingsPage() {
               className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
             />
           </div>
-          {passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
+          {passwordError && <p className="text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{passwordError}</p>}
           {passwordMsg && <p className="text-sm text-emerald-600">{passwordMsg}</p>}
           <button
             type="submit"
