@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Send, Bot, User, Wrench } from "lucide-react";
+import Markdown from "react-markdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -52,10 +53,16 @@ export function ChatPanel({ messages, onSend, connected, loading }: ChatPanelPro
                 : <Bot className="w-3 h-3 text-violet-600" />}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] leading-relaxed text-gray-700 whitespace-pre-wrap break-words">
-                {msg.content}
-                {!msg.done && <span className="inline-block w-1 h-[14px] bg-violet-500 animate-pulse ml-0.5 -mb-0.5" />}
-              </div>
+              {msg.role === "user" ? (
+                <div className="text-[13px] leading-relaxed text-gray-700 whitespace-pre-wrap break-words">
+                  {msg.content}
+                </div>
+              ) : (
+                <div className="text-[13px] leading-relaxed text-gray-700 prose prose-sm prose-gray max-w-none [&_pre]:bg-gray-50 [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:text-xs [&_code]:text-violet-600 [&_code]:text-xs [&_code]:bg-gray-50 [&_code]:px-1 [&_code]:rounded [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-medium">
+                  <TypedMarkdown content={msg.content} animate={!msg.done} />
+                  {!msg.done && <span className="inline-block w-1 h-[14px] bg-violet-500 animate-pulse ml-0.5 -mb-0.5" />}
+                </div>
+              )}
               {msg.toolUse && msg.toolUse.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {msg.toolUse.map((t, j) => (
@@ -118,4 +125,41 @@ export function ChatPanel({ messages, onSend, connected, loading }: ChatPanelPro
       </div>
     </div>
   );
+}
+
+function TypedMarkdown({ content, animate }: { content: string; animate: boolean }) {
+  const [displayed, setDisplayed] = useState("");
+  const targetRef = useRef(content);
+  const indexRef = useRef(0);
+
+  useEffect(() => {
+    if (!animate) {
+      setDisplayed(content);
+      return;
+    }
+    // New content arrived — type it out
+    targetRef.current = content;
+    if (indexRef.current > content.length) indexRef.current = content.length;
+
+    const interval = setInterval(() => {
+      if (indexRef.current < targetRef.current.length) {
+        // Show multiple chars per tick for speed
+        const step = Math.min(3, targetRef.current.length - indexRef.current);
+        indexRef.current += step;
+        setDisplayed(targetRef.current.substring(0, indexRef.current));
+      }
+    }, 15);
+
+    return () => clearInterval(interval);
+  }, [content, animate]);
+
+  // Once done, show full content
+  useEffect(() => {
+    if (!animate && content) {
+      setDisplayed(content);
+      indexRef.current = content.length;
+    }
+  }, [animate, content]);
+
+  return <Markdown>{displayed}</Markdown>;
 }
