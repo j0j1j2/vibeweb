@@ -83,6 +83,8 @@ export function ChatLayout({ children }: { children: ReactNode }) {
           return updated;
         });
         setLoading(false);
+        // Notify preview to refresh after Claude finishes a turn
+        window.dispatchEvent(new Event("vibeweb:preview-refresh"));
       } else if (msg.type === "error") {
         setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg.error}`, toolUse: [], done: true }]);
         setLoading(false);

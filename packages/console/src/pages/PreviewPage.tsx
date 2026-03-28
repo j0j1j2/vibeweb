@@ -28,7 +28,27 @@ export function PreviewPage() {
     ? `http://${subdomain}.vibeweb.localhost/${selectedPage === "index.html" ? "" : selectedPage}?preview=true`
     : "";
 
-  const handleRefresh = () => { if (iframeRef.current && previewUrl) iframeRef.current.src = previewUrl; };
+  const handleRefresh = () => {
+    if (iframeRef.current && previewUrl) iframeRef.current.src = previewUrl;
+    // Also re-check files (might have new pages)
+    if (tenantId) {
+      listFiles(tenantId).then((data) => {
+        const files = data.files ?? [];
+        const htmlPages = files
+          .filter((f: { path: string }) => f.path.startsWith("public/") && f.path.endsWith(".html"))
+          .map((f: { path: string }) => ({ name: f.path.replace("public/", ""), path: f.path }));
+        setPages(htmlPages);
+        setHasContent(files.length > 0);
+      }).catch(() => {});
+    }
+  };
+
+  // Auto-refresh when Claude finishes a turn
+  useEffect(() => {
+    const handler = () => handleRefresh();
+    window.addEventListener("vibeweb:preview-refresh", handler);
+    return () => window.removeEventListener("vibeweb:preview-refresh", handler);
+  }, [previewUrl, tenantId]);
 
   if (!subdomain) return <div className="flex items-center justify-center h-full text-gray-300">Loading...</div>;
 
