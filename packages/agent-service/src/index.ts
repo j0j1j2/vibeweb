@@ -19,6 +19,9 @@ const TOKEN_KEY = process.env.TOKEN_ENCRYPTION_KEY ?? "";
 const FALLBACK_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
 const app = Fastify({ logger: true });
+if (TOKEN_KEY === "a".repeat(64) || !TOKEN_KEY) {
+  app.log.warn("WARNING: Using default TOKEN_ENCRYPTION_KEY. Change this in production!");
+}
 const sessionManager = new SessionManager(tenantsDir);
 const proxies = new Map<string, SessionProxy>();
 

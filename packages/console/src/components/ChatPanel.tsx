@@ -7,6 +7,7 @@ interface Message {
   content: string;
   toolUse?: { tool: string; path?: string }[];
   done: boolean;
+  isError?: boolean;
 }
 
 interface ChatPanelProps {
@@ -47,16 +48,20 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
         {messages.map((msg, i) => (
           <div key={i} className="flex gap-3">
             <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 ${
-              msg.role === "user" ? "bg-gray-200" : "bg-violet-100"
+              msg.role === "user" ? "bg-gray-200" : msg.isError ? "bg-red-100" : "bg-violet-100"
             }`}>
               {msg.role === "user"
                 ? <User className="w-3 h-3 text-gray-500" />
-                : <Bot className="w-3 h-3 text-violet-600" />}
+                : <Bot className={`w-3 h-3 ${msg.isError ? "text-red-500" : "text-violet-600"}`} />}
             </div>
             <div className="flex-1 min-w-0">
               {msg.role === "user" ? (
                 <div className="text-[13px] leading-relaxed text-gray-700 whitespace-pre-wrap break-words">
                   {msg.content}
+                </div>
+              ) : msg.isError ? (
+                <div className="text-[13px] leading-relaxed text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                  <span className="font-medium">Error: </span>{msg.content}
                 </div>
               ) : (
                 <div className="text-[13px] leading-relaxed text-gray-700 prose prose-sm prose-gray max-w-none [&_pre]:bg-gray-50 [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:text-xs [&_code]:text-violet-600 [&_code]:text-xs [&_code]:bg-gray-50 [&_code]:px-1 [&_code]:rounded [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-medium">

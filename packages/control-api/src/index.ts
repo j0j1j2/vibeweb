@@ -14,7 +14,11 @@ const tenantsDir = path.join(DATA_DIR, "tenants");
 const dbPath = path.join(DATA_DIR, "vibeweb.db");
 fs.mkdirSync(tenantsDir, { recursive: true });
 const db = createDb(dbPath);
+const ADMIN_KEY = process.env.ADMIN_API_KEY ?? "";
 const app = Fastify({ logger: true });
+if (ADMIN_KEY === "vibeweb-admin-secret" || !ADMIN_KEY) {
+  app.log.warn("WARNING: Using default ADMIN_API_KEY. Change this in production!");
+}
 app.register(tenantRoutes, { db, tenantsDir });
 app.register(authRoutes, { db });
 app.register(oauthRoutes, { db, tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? "" });

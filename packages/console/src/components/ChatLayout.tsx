@@ -9,6 +9,7 @@ interface Message {
   content: string;
   toolUse?: { tool: string; path?: string }[];
   done: boolean;
+  isError?: boolean;
 }
 
 interface ChatContextValue {
@@ -32,6 +33,8 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [subdomain, setSubdomain] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectRef = useRef(0);
+  const [reconnectCount, setReconnectCount] = useState(0);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -48,7 +51,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      if (msg.type === "session.ready") { setSessionId(msg.sessionId); setConnected(true); }
+      if (msg.type === "session.ready") { setSessionId(msg.sessionId); setConnected(true); reconnectRef.current = 0; }
       else if (msg.type === "stream") {
         const d = msg.data;
 
@@ -122,18 +125,37 @@ export function ChatLayout({ children }: { children: ReactNode }) {
         // Notify preview to refresh after Claude finishes a turn
         window.dispatchEvent(new Event("vibeweb:preview-refresh"));
       } else if (msg.type === "error") {
-        setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg.error}`, toolUse: [], done: true }]);
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          content: msg.error || "Something went wrong",
+          toolUse: [],
+          done: true,
+          isError: true,
+        }]);
         setLoading(false);
       }
     };
 
-    ws.onclose = () => { setConnected(false); setSessionId(null); };
+    ws.onclose = () => {
+      setConnected(false);
+      setSessionId(null);
+      // Auto-reconnect after 2 seconds (max 5 retries)
+      if (reconnectRef.current < 5) {
+        reconnectRef.current += 1;
+        setTimeout(() => {
+          // Re-trigger the effect by updating a reconnect counter
+          setReconnectCount(c => c + 1);
+        }, 2000);
+      } else {
+        setStatus("Connection lost. Please refresh the page.");
+      }
+    };
 
     return () => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "session.end", sessionId }));
       ws.close();
     };
-  }, [tenantId]);
+  }, [tenantId, reconnectCount]);
 
   const handleSend = useCallback((content: string) => {
     if (!wsRef.current || !sessionId) return;
