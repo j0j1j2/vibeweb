@@ -6,30 +6,144 @@ export function generateClaudeMd(tenantName: string, previewDir: string, dbDir: 
   const apiEndpoints = findApiEndpoints(path.join(previewDir, "functions", "api"));
   const dbTables = readDbTables(path.join(dbDir, "tenant.db"));
 
-  return `# Tenant: ${tenantName}
+  return `# ${tenantName}
 
-## Working Directory Structure
-- /workspace/public/     — static files (HTML, CSS, JS, images)
-- /workspace/functions/  — serverless API functions (/api/* routes)
-- /data/db/tenant.db     — SQLite database
+You are the AI assistant for this website. The site owner will ask you to build and modify their website using natural language. Be friendly, proactive, and always show what you changed.
+
+## Architecture
+
+\`\`\`
+/workspace/
+├── public/           ← Web pages (HTML, CSS, JS, images)
+│   └── index.html    ← Homepage
+├── functions/
+│   └── api/          ← Backend API endpoints (.js files)
+└── CLAUDE.md         ← This file
+/data/db/tenant.db    ← SQLite database
+\`\`\`
+
+## Skills
+
+### 🎨 Skill: Build Web Pages
+Create or edit pages in \`/workspace/public/\`.
+
+**How to create a page:**
+1. Write an HTML file in \`/workspace/public/\`
+2. Include inline CSS or link to a CSS file
+3. The page is immediately live at \`/{filename}\`
+
+**Best practices:**
+- Use modern, responsive HTML5 with clean CSS
+- Mobile-first design with viewport meta tag
+- Use system fonts for fast loading
+- Add smooth transitions and subtle animations
+- Use semantic HTML (header, main, footer, nav, section)
+- Homepage is always \`public/index.html\`
+
+**Example — create a page:**
+\`\`\`
+Write file: /workspace/public/about.html
+→ Accessible at: /about.html
+\`\`\`
+
+### 🗄️ Skill: Manage Database
+Use SQLite via better-sqlite3. DB path: \`/data/db/tenant.db\`
+
+**How to use:**
+\`\`\`javascript
+const Database = require('better-sqlite3');
+const db = new Database('/data/db/tenant.db');
+
+// Create table
+db.exec(\`CREATE TABLE IF NOT EXISTS products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  price REAL,
+  created_at TEXT DEFAULT (datetime('now'))
+)\`);
+
+// Insert
+db.prepare('INSERT INTO products (name, price) VALUES (?, ?)').run('Coffee', 4.50);
+
+// Query
+const rows = db.prepare('SELECT * FROM products').all();
+db.close();
+\`\`\`
+
+**When the user asks about data:**
+- Create tables with proper types and constraints
+- Always include id, created_at columns
+- Use parameterized queries (never string concatenation)
+- After creating/modifying tables, tell the user what was done
+
+### 🔌 Skill: Build API Endpoints
+Create serverless functions in \`/workspace/functions/api/\`.
+
+**Function format:** Each .js file becomes an API endpoint at \`/api/{filename}\`
+
+\`\`\`javascript
+// /workspace/functions/api/products.js → accessible at /api/products
+const Database = require('better-sqlite3');
+
+export default async function(req) {
+  const db = new Database('/data/db/tenant.db');
+
+  if (req.method === 'GET') {
+    const products = db.prepare('SELECT * FROM products').all();
+    db.close();
+    return {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(products)
+    };
+  }
+
+  if (req.method === 'POST') {
+    const { name, price } = JSON.parse(req.body);
+    db.prepare('INSERT INTO products (name, price) VALUES (?, ?)').run(name, price);
+    db.close();
+    return {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ success: true })
+    };
+  }
+
+  return { status: 405, body: 'Method not allowed' };
+}
+\`\`\`
+
+**Best practices:**
+- One file per resource (products.js, users.js, etc.)
+- Handle GET, POST, PUT, DELETE methods
+- Always close database connections
+- Return proper status codes and JSON responses
+- Use req.method, req.query, req.body, req.headers
+
+### 📦 Skill: Install Packages
+Run npm install in \`/workspace/functions/\` for backend dependencies.
+
+\`\`\`bash
+cd /workspace/functions && npm install package-name
+\`\`\`
 
 ## Rules
 - NEVER modify files outside /workspace and /data/db/
-- Serverless functions go in /workspace/functions/api/ as .js files
-- Function signature: export default async function(req) { return { status, headers, body } }
-- DB access: use better-sqlite3, path is /data/db/tenant.db
-- npm packages: run npm install in /workspace/functions/
+- ALWAYS explain what you did in simple terms after making changes
+- When creating pages, make them look professional and modern
+- When the user's request is vague, ask a clarifying question OR make a reasonable choice and explain it
+- After creating or editing a page, tell the user to check the preview
 
 ## Current State
 
 ### Files
-${fileTree || "(no files yet)"}
+${fileTree || "(empty — no files yet, ready to start building!)"}
 
 ### API Endpoints
-${apiEndpoints || "(no API endpoints yet)"}
+${apiEndpoints || "(none yet)"}
 
 ### Database Tables
-${dbTables || "(no tables yet)"}
+${dbTables || "(none yet)"}
 `;
 }
 
@@ -66,8 +180,13 @@ function readDbTables(dbPath: string): string {
     const Database = require("better-sqlite3");
     const db = new Database(dbPath, { readonly: true });
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as { name: string }[];
+    if (tables.length === 0) { db.close(); return ""; }
+    const lines: string[] = [];
+    for (const t of tables) {
+      const cols = db.prepare(`PRAGMA table_info(${t.name})`).all() as { name: string; type: string }[];
+      lines.push(`- ${t.name} (${cols.map(c => c.name).join(", ")})`);
+    }
     db.close();
-    if (tables.length === 0) return "";
-    return tables.map((t: { name: string }) => `- ${t.name}`).join("\n");
+    return lines.join("\n");
   } catch { return ""; }
 }

@@ -40,12 +40,16 @@ export function PreviewPage() {
           <Sparkles className="w-8 h-8 text-white" />
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">Welcome to your site!</h2>
-        <p className="text-gray-400 max-w-md mb-1">
-          Start by telling the AI what you'd like to build.
+        <p className="text-gray-400 max-w-md mb-4">
+          Use the chat on the right to start building. Just describe what you want and AI will create it for you.
         </p>
-        <p className="text-gray-300 text-sm max-w-md">
-          Try something like: "Create a landing page for a coffee shop with a menu and contact section"
-        </p>
+        <div className="flex items-center gap-2 text-sm text-violet-600">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+          </span>
+          Try the suggestions in the chat panel →
+        </div>
       </div>
     );
   }

@@ -70,9 +70,28 @@ export function ChatPanel({ messages, onSend, connected, loading }: ChatPanelPro
           </div>
         ))}
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-3 pb-12">
-            <Bot className="w-10 h-10" />
-            <p className="text-sm">Describe what you want to build</p>
+          <div className="flex flex-col items-center justify-center h-full px-4 pb-8">
+            <Bot className="w-10 h-10 text-violet-300 mb-3" />
+            <p className="text-sm font-medium text-gray-600 mb-1">What would you like to build?</p>
+            <p className="text-xs text-gray-300 mb-5 text-center">Click an example or type your own</p>
+            <div className="space-y-2 w-full max-w-[280px]">
+              {[
+                { icon: "🎨", text: "Create a landing page for my business" },
+                { icon: "🗄️", text: "Set up a database to store contacts" },
+                { icon: "🔌", text: "Build an API to manage my products" },
+                { icon: "📝", text: "Add a blog section to my site" },
+              ].map((example) => (
+                <button
+                  key={example.text}
+                  onClick={() => { if (connected && !loading) onSend(example.text); }}
+                  disabled={!connected || loading}
+                  className="flex items-center gap-2.5 w-full px-3 py-2.5 text-left text-[13px] text-gray-500 bg-gray-50 hover:bg-violet-50 hover:text-violet-700 border border-gray-100 hover:border-violet-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <span className="text-base">{example.icon}</span>
+                  <span>{example.text}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
