@@ -73,6 +73,9 @@ services:
       dockerfile: packages/console/Dockerfile
     ports:
       - "5173:80"
+    depends_on:
+      - control-api
+      - agent-service
 
 volumes:
   app-data:
