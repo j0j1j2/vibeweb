@@ -224,7 +224,7 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
           }`}>{tenant.status}</span>
         </td>
         <td className="px-4 py-3 text-right whitespace-nowrap">
-          <div className="inline-flex items-center gap-1 flex-wrap justify-end">
+          <div className="inline-flex items-center gap-1 justify-end">
             <Link to={`/t/${tenant.id}/preview`}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors whitespace-nowrap">
               <ExternalLink className="w-3 h-3" /> Open
