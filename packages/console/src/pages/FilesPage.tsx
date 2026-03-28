@@ -10,6 +10,8 @@ export function FilesPage() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [hasFiles, setHasFiles] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showNewFile, setShowNewFile] = useState(false);
+  const [newFilePath, setNewFilePath] = useState("");
 
   useEffect(() => {
     if (!tenantId) return;
@@ -42,10 +44,11 @@ export function FilesPage() {
   };
 
   const handleNewFile = async () => {
-    const name = prompt("File path (e.g. public/about.html):");
-    if (!name) return;
-    await uploadFile(tenantId, name, "");
+    if (!newFilePath.trim()) return;
+    await uploadFile(tenantId, newFilePath.trim(), "");
     setHasFiles(true);
+    setShowNewFile(false);
+    setNewFilePath("");
     refresh();
   };
 
@@ -57,7 +60,7 @@ export function FilesPage() {
   if (!hasFiles) {
     return (
       <div className="flex flex-col h-full">
-        <div className="border-b border-gray-100 px-3 py-2 flex items-center gap-2">
+        <div className="border-b border-gray-100 px-3 py-2 flex items-center gap-2 flex-wrap">
           <button
             onClick={handleUpload}
             className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
@@ -65,13 +68,38 @@ export function FilesPage() {
             <Upload className="w-3.5 h-3.5" />
             Upload
           </button>
-          <button
-            onClick={handleNewFile}
-            className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          >
-            <FilePlus className="w-3.5 h-3.5" />
-            New File
-          </button>
+          {showNewFile ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                value={newFilePath}
+                onChange={(e) => setNewFilePath(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleNewFile(); if (e.key === "Escape") { setShowNewFile(false); setNewFilePath(""); } }}
+                placeholder="public/about.html"
+                className="px-2 py-1 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100 w-44"
+                autoFocus
+              />
+              <button
+                onClick={handleNewFile}
+                className="px-2 py-1 text-[12px] bg-violet-600 text-white rounded-md hover:bg-violet-500 transition-colors"
+              >
+                Create
+              </button>
+              <button
+                onClick={() => { setShowNewFile(false); setNewFilePath(""); }}
+                className="px-2 py-1 text-[12px] bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowNewFile(true)}
+              className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <FilePlus className="w-3.5 h-3.5" />
+              New File
+            </button>
+          )}
         </div>
         <div className="flex flex-col items-center justify-center flex-1 text-gray-300 gap-2">
           <FolderOpen className="w-10 h-10" />
@@ -84,7 +112,7 @@ export function FilesPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-gray-100 px-3 py-2 flex items-center gap-2 flex-shrink-0">
+      <div className="border-b border-gray-100 px-3 py-2 flex items-center gap-2 flex-shrink-0 flex-wrap">
         <button
           onClick={handleUpload}
           className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
@@ -92,13 +120,38 @@ export function FilesPage() {
           <Upload className="w-3.5 h-3.5" />
           Upload
         </button>
-        <button
-          onClick={handleNewFile}
-          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-        >
-          <FilePlus className="w-3.5 h-3.5" />
-          New File
-        </button>
+        {showNewFile ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              value={newFilePath}
+              onChange={(e) => setNewFilePath(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleNewFile(); if (e.key === "Escape") { setShowNewFile(false); setNewFilePath(""); } }}
+              placeholder="public/about.html"
+              className="px-2 py-1 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100 w-44"
+              autoFocus
+            />
+            <button
+              onClick={handleNewFile}
+              className="px-2 py-1 text-[12px] bg-violet-600 text-white rounded-md hover:bg-violet-500 transition-colors"
+            >
+              Create
+            </button>
+            <button
+              onClick={() => { setShowNewFile(false); setNewFilePath(""); }}
+              className="px-2 py-1 text-[12px] bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowNewFile(true)}
+            className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            <FilePlus className="w-3.5 h-3.5" />
+            New File
+          </button>
+        )}
       </div>
       <div className="flex flex-1 min-h-0">
         <div className="w-[180px] border-r border-gray-100 bg-gray-50/30 overflow-hidden flex-shrink-0">

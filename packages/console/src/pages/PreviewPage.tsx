@@ -11,6 +11,8 @@ export function PreviewPage() {
   const [selectedPage, setSelectedPage] = useState("index.html");
   const [hasContent, setHasContent] = useState<boolean | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [showAddPage, setShowAddPage] = useState(false);
+  const [newPageName, setNewPageName] = useState("");
 
   const fetchPages = () => {
     if (!tenantId) return;
@@ -43,10 +45,12 @@ export function PreviewPage() {
   }, [subdomain, selectedPage, tenantId]);
 
   const handleAddPage = () => {
-    const name = prompt("Page name (e.g. about, contact, pricing):");
-    if (!name) return;
+    if (!newPageName.trim()) return;
+    const name = newPageName.trim();
     const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
     sendMessage(`Create a new page called "${name}" (${slug}.html) and add a link to it in the navigation menu of the homepage.`);
+    setShowAddPage(false);
+    setNewPageName("");
   };
 
   const handleEditPage = (pageName: string) => {
@@ -113,14 +117,41 @@ export function PreviewPage() {
           )}
         </div>
         <div className="px-3 py-2 border-t border-gray-100">
-          <button
-            onClick={handleAddPage}
-            disabled={!connected}
-            className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-[12px] text-violet-600 hover:bg-violet-50 transition-colors disabled:opacity-40"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Page
-          </button>
+          {showAddPage ? (
+            <div className="flex flex-col gap-1.5">
+              <input
+                value={newPageName}
+                onChange={(e) => setNewPageName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleAddPage(); if (e.key === "Escape") { setShowAddPage(false); setNewPageName(""); } }}
+                placeholder="about, contact..."
+                className="w-full px-2 py-1 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100"
+                autoFocus
+              />
+              <div className="flex gap-1">
+                <button
+                  onClick={handleAddPage}
+                  className="flex-1 px-2 py-1 text-[12px] bg-violet-600 text-white rounded-md hover:bg-violet-500 transition-colors"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => { setShowAddPage(false); setNewPageName(""); }}
+                  className="flex-1 px-2 py-1 text-[12px] bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddPage(true)}
+              disabled={!connected}
+              className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-[12px] text-violet-600 hover:bg-violet-50 transition-colors disabled:opacity-40"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Page
+            </button>
+          )}
         </div>
       </div>
 

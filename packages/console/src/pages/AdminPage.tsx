@@ -20,6 +20,8 @@ export function AdminPage() {
   const [expandedAuth, setExpandedAuth] = useState<string | null>(null);
   const [newApiKey, setNewApiKey] = useState<{ tenantId: string; key: string } | null>(null);
   const [newTenantCreds, setNewTenantCreds] = useState<{ tenantId: string; subdomain: string; initialPassword: string } | null>(null);
+  const [deletingTenantId, setDeletingTenantId] = useState<string | null>(null);
+  const [resettingTenantId, setResettingTenantId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const data = await listTenants().catch(() => []);
@@ -56,9 +58,9 @@ export function AdminPage() {
     refresh();
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete tenant "${name}"? This cannot be undone.`)) return;
+  const handleDelete = async (id: string) => {
     await deleteTenant(id);
+    setDeletingTenantId(null);
     refresh();
   };
 
@@ -129,9 +131,15 @@ export function AdminPage() {
                 claudeStatus={claudeStatuses[t.id] ?? { connected: false }}
                 expanded={expandedAuth === t.id}
                 onToggleAuth={() => setExpandedAuth(expandedAuth === t.id ? null : t.id)}
-                onDelete={() => handleDelete(t.id, t.name)}
-                onResetPassword={async () => {
-                  if (!confirm(`Reset password for "${t.name}"?`)) return;
+                confirmingDelete={deletingTenantId === t.id}
+                onRequestDelete={() => setDeletingTenantId(t.id)}
+                onCancelDelete={() => setDeletingTenantId(null)}
+                onConfirmDelete={() => handleDelete(t.id)}
+                confirmingReset={resettingTenantId === t.id}
+                onRequestReset={() => setResettingTenantId(t.id)}
+                onCancelReset={() => setResettingTenantId(null)}
+                onConfirmReset={async () => {
+                  setResettingTenantId(null);
                   const res = await fetch(`/api/tenants/${t.id}/reset-password`, { method: "POST" });
                   const result = await res.json();
                   if (result?.password) {
@@ -152,13 +160,19 @@ export function AdminPage() {
   );
 }
 
-function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onResetPassword, onRefresh }: {
+function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, confirmingDelete, onRequestDelete, onCancelDelete, onConfirmDelete, confirmingReset, onRequestReset, onCancelReset, onConfirmReset, onRefresh }: {
   tenant: Tenant;
   claudeStatus: any;
   expanded: boolean;
   onToggleAuth: () => void;
-  onDelete: () => void;
-  onResetPassword: () => void;
+  confirmingDelete: boolean;
+  onRequestDelete: () => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: () => void;
+  confirmingReset: boolean;
+  onRequestReset: () => void;
+  onCancelReset: () => void;
+  onConfirmReset: () => void;
   onRefresh: () => void;
 }) {
   const claudeConnected = claudeStatus?.connected ?? false;
@@ -167,6 +181,7 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
 
   const handleStartLogin = async () => {
     setStarting(true); setSubmitError(""); setOauthUrl(null);
@@ -203,9 +218,9 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
   };
 
   const handleDisconnect = async () => {
-    if (!confirm(`Disconnect Claude for "${tenant.name}"?`)) return;
     await fetch(`/agent-api/auth/claude/${tenant.id}`, { method: "DELETE" });
     setCodeInput("");
+    setConfirmingDisconnect(false);
     onRefresh();
   };
 
@@ -228,20 +243,36 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
             tenant.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"
           }`}>{tenant.status}</span>
         </td>
-        <td className="px-4 py-3 text-right whitespace-nowrap">
-          <div className="inline-flex items-center gap-1 justify-end">
-            <Link to={`/t/${tenant.id}/preview`}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors whitespace-nowrap">
-              <ExternalLink className="w-3 h-3" /> Open
-            </Link>
-            <button onClick={onResetPassword}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors whitespace-nowrap">
-              <Key className="w-3 h-3" /> Reset PW
-            </button>
-            <button onClick={onDelete}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors whitespace-nowrap">
-              <Trash2 className="w-3 h-3" /> Delete
-            </button>
+        <td className="px-4 py-3 text-right">
+          <div className="flex items-center gap-1 justify-end flex-wrap">
+            {confirmingDelete ? (
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-red-600 font-medium">Delete "{tenant.name}"?</span>
+                <button onClick={onConfirmDelete} className="px-2 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors">Yes</button>
+                <button onClick={onCancelDelete} className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium hover:bg-gray-200 transition-colors">No</button>
+              </div>
+            ) : confirmingReset ? (
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-amber-600 font-medium">Reset password?</span>
+                <button onClick={onConfirmReset} className="px-2 py-1 bg-amber-500 text-white rounded text-xs font-medium hover:bg-amber-600 transition-colors">Yes</button>
+                <button onClick={onCancelReset} className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium hover:bg-gray-200 transition-colors">No</button>
+              </div>
+            ) : (
+              <>
+                <Link to={`/t/${tenant.id}/preview`}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors whitespace-nowrap">
+                  <ExternalLink className="w-3 h-3" /> Open
+                </Link>
+                <button onClick={onRequestReset}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors whitespace-nowrap">
+                  <Key className="w-3 h-3" /> Reset PW
+                </button>
+                <button onClick={onRequestDelete}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors whitespace-nowrap">
+                  <Trash2 className="w-3 h-3" /> Delete
+                </button>
+              </>
+            )}
           </div>
         </td>
       </tr>
@@ -265,7 +296,15 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
                   <div className="text-gray-400">Connected</div>
                   <div className="text-gray-600">{claudeStatus.connectedAt ? new Date(claudeStatus.connectedAt).toLocaleString() : "—"}</div>
                 </div>
-                <button onClick={handleDisconnect} className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors">Disconnect</button>
+                {confirmingDisconnect ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-red-600">Disconnect Claude?</span>
+                    <button onClick={handleDisconnect} className="px-2 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors">Yes</button>
+                    <button onClick={() => setConfirmingDisconnect(false)} className="px-2 py-1 bg-gray-200 text-gray-600 rounded text-xs font-medium hover:bg-gray-300 transition-colors">No</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmingDisconnect(true)} className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors">Disconnect</button>
+                )}
               </div>
             ) : (
               <div className="space-y-4 max-w-xl">

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Trash2, ExternalLink } from "lucide-react";
 import { deleteTenant } from "@/api";
@@ -5,9 +6,11 @@ import { deleteTenant } from "@/api";
 interface Tenant { id: string; subdomain: string; name: string; status: string; created_at: string; }
 
 export function TenantTable({ tenants, onRefresh }: { tenants: Tenant[]; onRefresh: () => void }) {
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete tenant "${name}"? This cannot be undone.`)) return;
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
     await deleteTenant(id);
+    setDeletingId(null);
     onRefresh();
   };
 
@@ -34,7 +37,15 @@ export function TenantTable({ tenants, onRefresh }: { tenants: Tenant[]; onRefre
               <td className="px-4 py-3 text-zinc-500">{new Date(t.created_at).toLocaleDateString()}</td>
               <td className="px-4 py-3 text-right space-x-2">
                 <Link to={`/t/${t.id}/chat`} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"><ExternalLink className="w-3 h-3" /> Open</Link>
-                <button onClick={() => handleDelete(t.id, t.name)} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"><Trash2 className="w-3 h-3" /> Delete</button>
+                {deletingId === t.id ? (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="text-xs text-red-600">Delete?</span>
+                    <button onClick={() => handleDelete(t.id)} className="px-2 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors">Yes</button>
+                    <button onClick={() => setDeletingId(null)} className="px-2 py-1 bg-gray-200 rounded text-xs font-medium hover:bg-gray-300 transition-colors">No</button>
+                  </span>
+                ) : (
+                  <button onClick={() => setDeletingId(t.id)} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"><Trash2 className="w-3 h-3" /> Delete</button>
+                )}
               </td>
             </tr>
           ))}

@@ -83,6 +83,7 @@ export function FileViewer({
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const ext = (filePath.split(".").pop() ?? "").toLowerCase();
   const isImage = IMAGE_EXTS.has(ext);
@@ -139,10 +140,9 @@ export function FileViewer({
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Delete ${filePath}?`)) return;
     setDeleting(true);
     try { await deleteFile(tenantId, filePath); onDeleted?.(); }
-    catch { alert("Failed to delete file"); }
+    catch { setShowDeleteConfirm(false); }
     finally { setDeleting(false); }
   };
 
@@ -166,6 +166,12 @@ export function FileViewer({
                 <X className="w-3.5 h-3.5" />
               </button>
             </>
+          ) : showDeleteConfirm ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-red-600 text-xs">Delete this file?</span>
+              <button onClick={handleDelete} disabled={deleting} className="px-2 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors disabled:opacity-50">Yes</button>
+              <button onClick={() => setShowDeleteConfirm(false)} className="px-2 py-1 bg-gray-200 text-gray-600 rounded text-xs font-medium hover:bg-gray-300 transition-colors">No</button>
+            </div>
           ) : (
             <>
               {!isImage && (
@@ -176,7 +182,7 @@ export function FileViewer({
               <button onClick={handleDownload} title="Download" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
                 <Download className="w-3.5 h-3.5" />
               </button>
-              <button onClick={handleDelete} disabled={deleting} title="Delete" className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50">
+              <button onClick={() => setShowDeleteConfirm(true)} title="Delete" className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </>
