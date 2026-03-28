@@ -28,6 +28,7 @@ services:
       - "1919:1919"
     volumes:
       - app-data:/data
+      - tenant-data:/data/tenants
 
   function-runner:
     build:

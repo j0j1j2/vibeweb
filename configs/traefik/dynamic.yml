@@ -21,7 +21,7 @@ http:
         - web
 
     function-runner:
-      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`) && PathPrefix(`/api/`)"
+      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/api/`)"
       service: function-runner
       entryPoints:
         - web
@@ -29,7 +29,7 @@ http:
         - tenant-auth
 
     preview-ws:
-      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`) && PathPrefix(`/ws`)"
+      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/ws`)"
       service: preview-server
       entryPoints:
         - web
@@ -37,7 +37,7 @@ http:
         - tenant-auth
 
     preview-static:
-      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`) && Query(`preview=true`)"
+      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && Query(`preview=true`)"
       service: preview-server
       entryPoints:
         - web
@@ -46,7 +46,7 @@ http:
       priority: 100
 
     agent-ws:
-      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`) && PathPrefix(`/agent`)"
+      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/agent`)"
       service: agent-service
       entryPoints:
         - web
@@ -55,7 +55,7 @@ http:
       priority: 90
 
     site-server:
-      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.vibeweb.localhost`)"
+      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`)"
       service: site-server
       entryPoints:
         - web
