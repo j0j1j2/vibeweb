@@ -26,6 +26,36 @@ export async function fileRoutes(app: FastifyInstance, opts: FileRoutesOpts): Pr
     const content = fs.readFileSync(fullPath, "utf-8");
     reply.type("text/plain").send(content);
   });
+
+  app.put<{ Params: { id: string; "*": string }; Body: { content: string } }>("/tenants/:id/files/*", async (req, reply) => {
+    const filePath = req.params["*"];
+    const fullPath = path.join(tenantsDir, req.params.id, "preview", filePath);
+
+    const resolved = path.resolve(fullPath);
+    const base = path.resolve(path.join(tenantsDir, req.params.id, "preview"));
+    if (!resolved.startsWith(base)) return reply.status(403).send({ error: "forbidden" });
+
+    fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+
+    const { content } = req.body;
+    fs.writeFileSync(fullPath, content, "utf-8");
+
+    return { success: true, path: filePath };
+  });
+
+  app.delete<{ Params: { id: string; "*": string } }>("/tenants/:id/files/*", async (req, reply) => {
+    const filePath = req.params["*"];
+    const fullPath = path.join(tenantsDir, req.params.id, "preview", filePath);
+
+    const resolved = path.resolve(fullPath);
+    const base = path.resolve(path.join(tenantsDir, req.params.id, "preview"));
+    if (!resolved.startsWith(base)) return reply.status(403).send({ error: "forbidden" });
+
+    if (!fs.existsSync(fullPath)) return reply.status(404).send({ error: "file not found" });
+
+    fs.unlinkSync(fullPath);
+    return { success: true };
+  });
 }
 
 function walkDir(dir: string, baseDir: string, result: FileEntry[]): void {

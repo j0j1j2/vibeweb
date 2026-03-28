@@ -25,6 +25,16 @@ export async function deployTenant(id: string) { const res = await apiFetch(`/te
 export async function getTenantStatus(id: string) { const res = await apiFetch(`/tenants/${id}/status`); return res.json(); }
 export async function listFiles(tenantId: string) { const res = await apiFetch(`/tenants/${tenantId}/files`); return res.json(); }
 export async function readFile(tenantId: string, filePath: string) { const res = await apiFetch(`/tenants/${tenantId}/files/${filePath}`); return res.text(); }
+export async function uploadFile(tenantId: string, filePath: string, content: string) {
+  const res = await apiFetch(`/tenants/${tenantId}/files/${filePath}`, {
+    method: "PUT", body: JSON.stringify({ content })
+  });
+  return res.json();
+}
+export async function deleteFile(tenantId: string, filePath: string) {
+  const res = await apiFetch(`/tenants/${tenantId}/files/${filePath}`, { method: "DELETE" });
+  return res.json();
+}
 export async function queryDb(tenantId: string, sql: string) {
   const res = await apiFetch(`/tenants/${tenantId}/db/query`, { method: "POST", body: JSON.stringify({ sql }) });
   return res.json();

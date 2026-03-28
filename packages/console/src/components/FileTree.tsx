@@ -26,11 +26,11 @@ function buildTree(files: FileEntry[]): TreeNode[] {
   return root;
 }
 
-export function FileTree({ tenantId, onSelect, selectedPath }: { tenantId: string; onSelect?: (path: string) => void; selectedPath?: string; }) {
+export function FileTree({ tenantId, onSelect, selectedPath, refreshKey }: { tenantId: string; onSelect?: (path: string) => void; selectedPath?: string; refreshKey?: number; }) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["public", "functions"]));
 
-  useEffect(() => { listFiles(tenantId).then((data) => setFiles(data.files ?? [])).catch(() => {}); }, [tenantId]);
+  useEffect(() => { listFiles(tenantId).then((data) => setFiles(data.files ?? [])).catch(() => {}); }, [tenantId, refreshKey]);
 
   const tree = buildTree(files);
   const toggleExpand = (path: string) => { setExpanded((prev) => { const next = new Set(prev); if (next.has(path)) next.delete(path); else next.add(path); return next; }); };
