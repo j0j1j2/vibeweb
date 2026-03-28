@@ -47,7 +47,7 @@ function runClaude(prompt) {
   args.push(prompt);
 
   console.log(`Spawning claude with args: ${args.join(" ")}`);
-  console.log(`HOME=${process.env.HOME}, TOKEN=${(process.env.CLAUDE_CODE_OAUTH_TOKEN || "").substring(0, 20)}..., WORKSPACE=${WORKSPACE}`);
+  console.log(`HOME=${process.env.HOME}, WORKSPACE=${WORKSPACE}`);
   console.log(`claude.json exists: ${require("fs").existsSync((process.env.HOME || "/home/vibe") + "/.claude.json")}`);
 
   claudeProcess = spawn("claude", args, {

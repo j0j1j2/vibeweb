@@ -10,7 +10,6 @@ import type { WsMessage } from "@vibeweb/shared";
 import { SessionManager } from "./session.js";
 import { SessionProxy } from "./proxy.js";
 import { generateClaudeMd } from "./claude-md.js";
-import { decryptToken } from "./crypto.js";
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
@@ -25,12 +24,16 @@ const proxies = new Map<string, SessionProxy>();
 
 app.get("/health", async () => ({ status: "ok" }));
 
+const UUID_RE = /^[a-f0-9-]{36}$/;
+function isValidTenantId(id: string): boolean { return UUID_RE.test(id); }
+
 // Track active login containers per tenant (container + stdin stream)
 const loginContainers = new Map<string, { container: Docker.Container; stream: NodeJS.ReadWriteStream }>();
 
 // POST /auth/claude/:tenantId/login - Start claude login flow for a tenant
 app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async (req, reply) => {
   const { tenantId } = req.params;
+  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
   // Ensure tenant claude-auth dir exists (inside the volume)
   const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
   fs.mkdirSync(claudeAuthDir, { recursive: true });
@@ -108,7 +111,7 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
         fs.mkdirSync(authDir, { recursive: true });
         fs.writeFileSync(path.join(authDir, "oauth-token"), token);
         fs.writeFileSync(path.join(authDir, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
-        app.log.info(`Token captured and saved for tenant ${tenantId}: ${token.substring(0, 20)}...`);
+        app.log.info(`Token captured and saved for tenant ${tenantId}`);
       }
     });
 
@@ -137,6 +140,7 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
 // POST /auth/claude/:tenantId/code - Send auth code to the running setup-token container
 app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude/:tenantId/code", async (req, reply) => {
   const { tenantId } = req.params;
+  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
   const { code } = req.body;
   if (!code) return reply.status(400).send({ error: "code is required" });
 
@@ -184,6 +188,7 @@ app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude
 // POST /auth/claude/:tenantId/token - Save token directly (admin pastes from setup-token)
 app.post<{ Params: { tenantId: string }; Body: { token: string } }>("/auth/claude/:tenantId/token", async (req, reply) => {
   const { tenantId } = req.params;
+  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
   const { token } = req.body;
   if (!token || !token.trim()) return reply.status(400).send({ error: "token is required" });
 
@@ -199,8 +204,9 @@ app.post<{ Params: { tenantId: string }; Body: { token: string } }>("/auth/claud
 });
 
 // GET /auth/claude/:tenantId/status - Check if tenant has credentials + details
-app.get<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/status", async (req) => {
+app.get<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/status", async (req, reply) => {
   const { tenantId } = req.params;
+  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
   const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
   const connected = checkCredentials(claudeAuthDir);
 
@@ -232,6 +238,7 @@ app.get<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/status", async
 
 // DELETE /auth/claude/:tenantId - Remove tenant credentials
 app.delete<{ Params: { tenantId: string } }>("/auth/claude/:tenantId", async (req, reply) => {
+  if (!isValidTenantId(req.params.tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
   const claudeAuthDir = path.join(tenantsDir, req.params.tenantId, "claude-auth");
   if (fs.existsSync(claudeAuthDir)) {
     fs.rmSync(claudeAuthDir, { recursive: true, force: true });

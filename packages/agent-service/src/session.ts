@@ -28,6 +28,9 @@ export class SessionManager {
 
   async createSession(opts: CreateSessionOpts): Promise<SessionInfo> {
     const { tenantId, sessionId, claudeMdContent, authToken } = opts;
+    if (!/^[a-f0-9-]{36}$/.test(tenantId)) {
+      throw new Error("Invalid tenant ID");
+    }
     // Clean up existing session for this tenant if any
     const existingSessionId = this.tenantSessions.get(tenantId);
     if (existingSessionId && this.sessions.has(existingSessionId)) {

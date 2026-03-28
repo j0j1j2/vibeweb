@@ -15,6 +15,13 @@ export async function dbQueryRoutes(app: FastifyInstance, opts: DbQueryRoutesOpt
     if (!trimmed.startsWith("SELECT") && !trimmed.startsWith("PRAGMA")) {
       return reply.status(400).send({ error: "only SELECT and PRAGMA queries are allowed" });
     }
+    if (sql.includes(";")) {
+      return reply.status(400).send({ error: "multiple statements not allowed" });
+    }
+    const forbidden = /\b(ATTACH|DETACH|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE)\b/i;
+    if (forbidden.test(sql)) {
+      return reply.status(400).send({ error: "only SELECT and PRAGMA queries are allowed" });
+    }
     const dbPath = path.join(tenantsDir, req.params.id, "db", "tenant.db");
     if (!fs.existsSync(dbPath)) return reply.status(404).send({ error: "tenant database not found" });
     try {

@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { listTenants, createTenant, deleteTenant, resetTenantApiKey } from "@/api";
 import {
   Plus, Trash2, ExternalLink, CheckCircle, XCircle,
-  ExternalLink as LinkIcon, Loader2, ChevronDown, ChevronRight,
-  Copy, Key, RefreshCw, Check,
+  Loader2, ChevronDown, ChevronRight,
+  Copy, Key, Check,
 } from "lucide-react";
 
 interface Tenant { id: string; subdomain: string; name: string; api_key: string; status: string; created_at: string; }

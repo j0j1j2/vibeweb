@@ -1,14 +1,5 @@
-function getApiKey(): string {
-  try {
-    const raw = localStorage.getItem("vibeweb_auth");
-    if (!raw) return "";
-    return JSON.parse(raw).apiKey ?? "";
-  } catch { return ""; }
-}
-
 async function apiFetch(path: string, opts: RequestInit = {}): Promise<Response> {
   const headers = new Headers(opts.headers);
-  headers.set("X-API-Key", getApiKey());
   if (opts.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   return fetch(`/api${path}`, { ...opts, headers });
 }

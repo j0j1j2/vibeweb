@@ -23,6 +23,21 @@ export async function fileRoutes(app: FastifyInstance, opts: FileRoutesOpts): Pr
     const base = path.resolve(path.join(tenantsDir, req.params.id, "preview"));
     if (!resolved.startsWith(base)) return reply.status(403).send({ error: "forbidden" });
     if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) return reply.status(404).send({ error: "file not found" });
+    const binaryExts = ['.png','.jpg','.jpeg','.gif','.ico','.webp','.bmp','.woff','.woff2','.ttf','.eot','.pdf','.zip'];
+    const isBinary = binaryExts.some(ext => fullPath.endsWith(ext));
+    if (isBinary) {
+      const content = fs.readFileSync(fullPath);
+      const mimeMap: Record<string, string> = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.ico': 'image/x-icon', '.webp': 'image/webp',
+        '.bmp': 'image/bmp', '.svg': 'image/svg+xml', '.pdf': 'application/pdf',
+        '.zip': 'application/zip', '.woff': 'font/woff', '.woff2': 'font/woff2',
+        '.ttf': 'font/ttf', '.eot': 'application/vnd.ms-fontobject',
+      };
+      const ext = fullPath.substring(fullPath.lastIndexOf('.'));
+      reply.type(mimeMap[ext] || 'application/octet-stream').send(content);
+      return;
+    }
     const content = fs.readFileSync(fullPath, "utf-8");
     reply.type("text/plain").send(content);
   });
