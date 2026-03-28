@@ -22,13 +22,11 @@ body {
   background: #bbb;
 }
 
-/* Prism.js syntax highlighting — light theme */
-.token.comment, .token.prolog, .token.doctype, .token.cdata { color: #999; }
-.token.punctuation { color: #666; }
-.token.property, .token.tag, .token.boolean, .token.number, .token.constant, .token.symbol, .token.deleted { color: #e45649; }
-.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: #50a14f; }
-.token.operator, .token.entity, .token.url { color: #0184bc; }
-.token.atrule, .token.attr-value, .token.keyword { color: #7c3aed; }
-.token.function, .token.class-name { color: #c18401; }
-.token.regex, .token.important, .token.variable { color: #e45649; }
-code[class*="language-"], pre[class*="language-"] { color: #383a42; }
+/* Syntax highlighting */
+.hl-keyword { color: #7c3aed; font-weight: 500; }
+.hl-string { color: #50a14f; }
+.hl-comment { color: #999; font-style: italic; }
+.hl-number { color: #c18401; }
+.hl-tag { color: #e45649; }
+.hl-attr { color: #c18401; }
+.hl-property { color: #0184bc; }
