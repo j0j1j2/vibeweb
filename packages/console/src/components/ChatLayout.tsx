@@ -124,7 +124,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             <div className={`mt-2 w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-gray-300"}`} />
           </div>
         ) : (
-          <div className="w-[380px] flex-shrink-0 relative">
+          <div className="w-[340px] flex-shrink-0 relative">
             <button
               onClick={() => setCollapsed(true)}
               className="absolute top-3 right-3 z-10 p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"

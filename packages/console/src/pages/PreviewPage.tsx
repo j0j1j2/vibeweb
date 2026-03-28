@@ -31,8 +31,8 @@ export function PreviewPage() {
 
   return (
     <div className="flex h-full">
-      {/* Page list — hidden when only 1 page */}
-      {pages.length !== 1 && (
+      {/* Page list — hidden when 0 or 1 page */}
+      {pages.length > 1 && (
         <div className="w-[140px] border-r border-gray-100 bg-gray-50/30 overflow-y-auto flex-shrink-0">
           <div className="px-3 py-3">
             <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Pages</div>

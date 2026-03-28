@@ -89,8 +89,8 @@ export function AdminPage() {
       )}
 
       {/* Tenant list with Claude connection management */}
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm min-w-[640px]">
+      <div className="border border-gray-200 rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[700px]">
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600 w-[22%]">Name</th>

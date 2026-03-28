@@ -51,24 +51,25 @@ export function DbExplorer({ tenantId: propTenantId }: { tenantId?: string }) {
 
   return (
     <div className="flex h-full">
-      {/* Table list sidebar */}
-      <div className="w-[140px] border-r border-gray-100 bg-gray-50/30 overflow-y-auto flex-shrink-0">
-        <div className="px-3 py-3">
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Tables</div>
-          {tables.map((t) => (
-            <button
-              key={t.name}
-              onClick={() => selectTable(t.name)}
-              className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-[13px] text-left text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <Table2 className="w-3.5 h-3.5 text-gray-300" />
-              <span className="truncate">{t.name}</span>
-              <ChevronRight className="w-3 h-3 text-gray-300 ml-auto" />
-            </button>
-          ))}
-          {tables.length === 0 && <div className="px-2 text-[12px] text-gray-300">No tables</div>}
+      {/* Table list sidebar — hidden when empty */}
+      {tables.length > 0 && (
+        <div className="w-[140px] border-r border-gray-100 bg-gray-50/30 overflow-y-auto flex-shrink-0">
+          <div className="px-3 py-3">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Tables</div>
+            {tables.map((t) => (
+              <button
+                key={t.name}
+                onClick={() => selectTable(t.name)}
+                className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-[13px] text-left text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <Table2 className="w-3.5 h-3.5 text-gray-300" />
+                <span className="truncate">{t.name}</span>
+                <ChevronRight className="w-3 h-3 text-gray-300 ml-auto" />
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Query area */}
       <div className="flex-1 flex flex-col min-w-0">

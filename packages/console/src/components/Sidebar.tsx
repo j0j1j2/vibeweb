@@ -47,7 +47,7 @@ export function Sidebar({ tenants }: { tenants: TenantNav[] }) {
             >
               {expanded[t.id] ? <ChevronDown className="w-3 h-3 text-gray-300 flex-shrink-0" /> : <ChevronRight className="w-3 h-3 text-gray-300 flex-shrink-0" />}
               <span className="font-medium text-gray-700 truncate min-w-0 flex-1" title={t.name}>{t.name}</span>
-              <span className="flex-shrink-0 text-[10px] text-gray-300 font-mono truncate max-w-[80px]" title={t.subdomain}>{t.subdomain}</span>
+              <span className="flex-shrink-0 text-[9px] text-gray-300 font-mono truncate max-w-[60px]" title={t.subdomain}>{t.subdomain}</span>
             </button>
 
             {expanded[t.id] && (
