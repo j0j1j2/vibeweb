@@ -37,7 +37,7 @@ http:
         - tenant-auth
 
     preview-static:
-      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && Query(`preview=true`)"
+      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && Query(`preview`, `true`)"
       service: preview-server
       entryPoints:
         - web
