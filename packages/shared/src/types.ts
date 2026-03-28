@@ -6,6 +6,7 @@ export interface Tenant {
   created_at: string;
   updated_at: string;
   status: "active" | "suspended" | "deleted";
+  initial_password?: string;
 }
 
 export interface Deployment {

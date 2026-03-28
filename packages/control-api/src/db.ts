@@ -16,6 +16,8 @@ export interface Db {
   getTenantByApiKey(apiKey: string): Tenant | undefined;
   listTenants(): Tenant[];
   resetApiKey(tenantId: string): string;
+  setPassword(tenantId: string, hashedPassword: string): void;
+  getTenantForLogin(subdomain: string): { id: string; subdomain: string; name: string; password_hash: string; status: string } | undefined;
   close(): void;
 }
 
@@ -55,11 +57,12 @@ export function createDb(dbPath: string): Db {
 
   try { db.exec("ALTER TABLE tenants ADD COLUMN claude_oauth_token TEXT"); } catch { /* column already exists */ }
   try { db.exec("ALTER TABLE tenants ADD COLUMN claude_token_expires_at TEXT"); } catch { /* column already exists */ }
+  try { db.exec("ALTER TABLE tenants ADD COLUMN password_hash TEXT"); } catch { /* column already exists */ }
 
   const stmts = {
     insertTenant: db.prepare(
-      `INSERT INTO tenants (id, subdomain, name, api_key, created_at, updated_at, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'active')`
+      `INSERT INTO tenants (id, subdomain, name, api_key, password_hash, created_at, updated_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`
     ),
     getTenantById: db.prepare("SELECT * FROM tenants WHERE id = ?"),
     getTenantBySubdomain: db.prepare("SELECT * FROM tenants WHERE subdomain = ? AND status != 'deleted'"),
@@ -76,15 +79,23 @@ export function createDb(dbPath: string): Db {
     getTenantByApiKey: db.prepare("SELECT * FROM tenants WHERE api_key = ? AND status != 'deleted'"),
     listTenants: db.prepare("SELECT * FROM tenants WHERE status != 'deleted' ORDER BY created_at DESC"),
     resetApiKey: db.prepare("UPDATE tenants SET api_key = ?, updated_at = ? WHERE id = ?"),
+    setPassword: db.prepare("UPDATE tenants SET password_hash = ?, updated_at = ? WHERE id = ?"),
+    getTenantForLogin: db.prepare("SELECT id, subdomain, name, password_hash, status FROM tenants WHERE subdomain = ? AND status != 'deleted'"),
   };
+
+  function hashPassword(password: string): string {
+    return crypto.createHash('sha256').update(password).digest('hex');
+  }
 
   return {
     createTenant(req: CreateTenantRequest): Tenant {
       const id = uuidv4();
       const api_key = crypto.randomBytes(32).toString("hex");
+      const initialPassword = crypto.randomBytes(12).toString('base64url');
+      const password_hash = hashPassword(initialPassword);
       const now = new Date().toISOString();
-      stmts.insertTenant.run(id, req.subdomain, req.name, api_key, now, now);
-      return { id, subdomain: req.subdomain, name: req.name, api_key, created_at: now, updated_at: now, status: "active" };
+      stmts.insertTenant.run(id, req.subdomain, req.name, api_key, password_hash, now, now);
+      return { id, subdomain: req.subdomain, name: req.name, api_key, created_at: now, updated_at: now, status: "active", initial_password: initialPassword };
     },
     getTenantById(id: string): Tenant | undefined {
       return stmts.getTenantById.get(id) as Tenant | undefined;
@@ -123,6 +134,12 @@ export function createDb(dbPath: string): Db {
       const newKey = crypto.randomBytes(32).toString("hex");
       stmts.resetApiKey.run(newKey, new Date().toISOString(), tenantId);
       return newKey;
+    },
+    setPassword(tenantId: string, hashedPassword: string): void {
+      stmts.setPassword.run(hashedPassword, new Date().toISOString(), tenantId);
+    },
+    getTenantForLogin(subdomain: string): { id: string; subdomain: string; name: string; password_hash: string; status: string } | undefined {
+      return stmts.getTenantForLogin.get(subdomain) as { id: string; subdomain: string; name: string; password_hash: string; status: string } | undefined;
     },
     close(): void {
       db.close();

@@ -27,7 +27,9 @@ describe("db", () => {
       expect(tenant.api_key).toBeTruthy();
 
       const found = db.getTenantById(tenant.id);
-      expect(found).toMatchObject(tenant);
+      // initial_password is only returned on creation, not stored in tenant row
+      const { initial_password: _ip, ...tenantWithoutInitialPassword } = tenant;
+      expect(found).toMatchObject(tenantWithoutInitialPassword);
     });
 
     it("finds tenant by subdomain", () => {

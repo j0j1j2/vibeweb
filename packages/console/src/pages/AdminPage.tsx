@@ -18,6 +18,7 @@ export function AdminPage() {
   const [claudeStatuses, setClaudeStatuses] = useState<Record<string, any>>({});
   const [expandedAuth, setExpandedAuth] = useState<string | null>(null);
   const [newApiKey, setNewApiKey] = useState<{ tenantId: string; key: string } | null>(null);
+  const [newTenantCreds, setNewTenantCreds] = useState<{ tenantId: string; subdomain: string; initialPassword: string } | null>(null);
 
   const refresh = useCallback(async () => {
     const data = await listTenants().catch(() => []);
@@ -42,7 +43,9 @@ export function AdminPage() {
     setShowCreate(false);
     setSubdomain("");
     setName("");
-    if (result?.api_key) {
+    if (result?.initial_password) {
+      setNewTenantCreds({ tenantId: result.id, subdomain: result.subdomain, initialPassword: result.initial_password });
+    } else if (result?.api_key) {
       setNewApiKey({ tenantId: result.id, key: result.api_key });
     }
     refresh();
@@ -83,7 +86,16 @@ export function AdminPage() {
         </form>
       )}
 
-      {/* API Key display after creation or reset */}
+      {/* Tenant credentials display after creation */}
+      {newTenantCreds && (
+        <TenantCreatedBanner
+          subdomain={newTenantCreds.subdomain}
+          initialPassword={newTenantCreds.initialPassword}
+          onDismiss={() => setNewTenantCreds(null)}
+        />
+      )}
+
+      {/* API Key display after reset */}
       {newApiKey && (
         <ApiKeyBanner apiKey={newApiKey.key} onDismiss={() => setNewApiKey(null)} />
       )}
@@ -260,6 +272,47 @@ function TenantRow({ tenant, claudeStatus, expanded, onToggleAuth, onDelete, onR
         </tr>
       )}
     </>
+  );
+}
+
+function TenantCreatedBanner({ subdomain, initialPassword, onDismiss }: { subdomain: string; initialPassword: string; onDismiss: () => void }) {
+  const [copiedPassword, setCopiedPassword] = useState(false);
+
+  const handleCopyPassword = async () => {
+    await navigator.clipboard.writeText(initialPassword);
+    setCopiedPassword(true);
+    setTimeout(() => setCopiedPassword(false), 2000);
+  };
+
+  return (
+    <div className="mb-6 p-4 border border-emerald-200 rounded-lg bg-emerald-50">
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Key className="w-4 h-4 text-emerald-600" />
+          <span className="text-sm font-semibold text-emerald-800">Tenant Created</span>
+        </div>
+        <button onClick={onDismiss} className="text-xs text-gray-400 hover:text-gray-600">Dismiss</button>
+      </div>
+      <p className="text-xs text-emerald-700 mb-3">Save this password. It won't be shown again.</p>
+      <div className="space-y-2">
+        <div className="flex gap-2 items-center">
+          <span className="text-xs text-gray-500 w-24 shrink-0">Subdomain</span>
+          <code className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-md text-xs font-mono text-gray-800 select-all">
+            {subdomain}
+          </code>
+        </div>
+        <div className="flex gap-2 items-center">
+          <span className="text-xs text-gray-500 w-24 shrink-0">Initial Password</span>
+          <code className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-md text-xs font-mono text-gray-800 break-all select-all">
+            {initialPassword}
+          </code>
+          <button onClick={handleCopyPassword}
+            className="px-3 py-2 bg-emerald-600 text-white text-xs font-medium rounded-md hover:bg-emerald-500 transition-colors flex items-center gap-1.5 shrink-0">
+            {copiedPassword ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

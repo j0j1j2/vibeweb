@@ -16,7 +16,8 @@ interface AuthState {
 
 interface AuthContextValue {
   auth: AuthState | null;
-  login: (apiKey: string) => Promise<boolean>;
+  login: (subdomain: string, password: string) => Promise<boolean>;
+  loginAdmin: (apiKey: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -38,7 +39,23 @@ function saveAuth(auth: AuthState | null): void {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState | null>(loadAuth);
 
-  const login = useCallback(async (apiKey: string): Promise<boolean> => {
+  const login = useCallback(async (subdomain: string, password: string): Promise<boolean> => {
+    try {
+      const loginRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subdomain, password }),
+      });
+      if (!loginRes.ok) return false;
+      const data = await loginRes.json();
+      const state: AuthState = { apiKey: "", tenant: data, isAdmin: false };
+      saveAuth(state);
+      setAuth(state);
+      return true;
+    } catch { return false; }
+  }, []);
+
+  const loginAdmin = useCallback(async (apiKey: string): Promise<boolean> => {
     try {
       const loginRes = await fetch("/api/auth/login", {
         method: "POST",
@@ -51,18 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const state: AuthState = { apiKey, tenant: null, isAdmin: true };
         saveAuth(state);
         setAuth(state);
-      } else {
-        const state: AuthState = { apiKey, tenant: data, isAdmin: false };
-        saveAuth(state);
-        setAuth(state);
+        return true;
       }
-      return true;
+      return false;
     } catch { return false; }
   }, []);
 
   const logout = useCallback(() => { saveAuth(null); setAuth(null); }, []);
 
-  return <AuthContext.Provider value={{ auth, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ auth, login, loginAdmin, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

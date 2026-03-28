@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { getTenant, getTenantStatus, deployTenant } from "@/api";
+import { getTenant, getTenantStatus, deployTenant, changePassword } from "@/api";
 import { Rocket } from "lucide-react";
 
 export function SettingsPage() {
@@ -9,6 +9,14 @@ export function SettingsPage() {
   const [status, setStatus] = useState<any>(null);
   const [deploying, setDeploying] = useState(false);
   const [deployMsg, setDeployMsg] = useState("");
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMsg, setPasswordMsg] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -22,6 +30,34 @@ export function SettingsPage() {
     try { await deployTenant(tenantId); setDeployMsg("Deployed successfully!"); getTenantStatus(tenantId).then(setStatus).catch(() => {}); }
     catch { setDeployMsg("Deploy failed"); }
     finally { setDeploying(false); }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(""); setPasswordMsg("");
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters");
+      return;
+    }
+    if (!tenantId) return;
+    setChangingPassword(true);
+    try {
+      const result = await changePassword(tenantId, currentPassword, newPassword);
+      if (result.success) {
+        setPasswordMsg("Password changed successfully!");
+        setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+      } else {
+        setPasswordError(result.error || "Failed to change password");
+      }
+    } catch {
+      setPasswordError("Failed to change password");
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   if (!tenant) return <div className="p-8 text-gray-400">Loading...</div>;
@@ -48,6 +84,51 @@ export function SettingsPage() {
           <Rocket className="w-4 h-4" />{deploying ? "Deploying..." : "Deploy to Live"}
         </button>
         {deployMsg && <p className="mt-2 text-sm text-emerald-600">{deployMsg}</p>}
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Change Password</h2>
+        <form onSubmit={handleChangePassword} className="space-y-3 max-w-sm">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Current Password</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Current password"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">New Password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="New password"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Confirm New Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
+            />
+          </div>
+          {passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
+          {passwordMsg && <p className="text-sm text-emerald-600">{passwordMsg}</p>}
+          <button
+            type="submit"
+            disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+            className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-500 disabled:opacity-40 transition-colors"
+          >
+            {changingPassword ? "Changing..." : "Change Password"}
+          </button>
+        </form>
       </section>
     </div>
   );
