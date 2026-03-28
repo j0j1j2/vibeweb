@@ -43,11 +43,11 @@ describe("db", () => {
       expect(() => db.createTenant({ subdomain: "dupe", name: "Second" })).toThrow();
     });
 
-    it("deletes a tenant (soft delete)", () => {
+    it("deletes a tenant", () => {
       const tenant = db.createTenant({ subdomain: "del", name: "Delete Me" });
       db.deleteTenant(tenant.id);
       const found = db.getTenantById(tenant.id);
-      expect(found?.status).toBe("deleted");
+      expect(found).toBeUndefined();
     });
   });
 

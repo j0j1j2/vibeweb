@@ -25,14 +25,14 @@ export function ApiPage() {
       {functions.length > 0 ? (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 dark:bg-zinc-800"><tr><th className="text-left px-4 py-3 font-medium">Function</th><th className="text-left px-4 py-3 font-medium">Endpoint</th></tr></thead>
+            <thead className="bg-gray-50"><tr><th className="text-left px-4 py-3 font-medium">Function</th><th className="text-left px-4 py-3 font-medium">Endpoint</th></tr></thead>
             <tbody>{functions.map((fn) => (
-              <tr key={fn.name} className="border-t hover:bg-zinc-50 dark:hover:bg-zinc-800/50"><td className="px-4 py-3 font-mono">{fn.name}</td><td className="px-4 py-3 font-mono text-zinc-500">{fn.path}</td></tr>
+              <tr key={fn.name} className="border-t hover:bg-gray-50"><td className="px-4 py-3 font-mono">{fn.name}</td><td className="px-4 py-3 font-mono text-gray-500">{fn.path}</td></tr>
             ))}</tbody>
           </table>
         </div>
       ) : (
-        <div className="text-center py-12 text-zinc-400"><Plug className="w-8 h-8 mx-auto mb-2" /><p>No API functions yet</p><p className="text-xs mt-1">Create functions in /functions/api/ using the chat editor</p></div>
+        <div className="text-center py-12 text-gray-400"><Plug className="w-8 h-8 mx-auto mb-2" /><p>No API functions yet</p><p className="text-xs mt-1">Create functions in /functions/api/ using the chat editor</p></div>
       )}
     </div>
   );

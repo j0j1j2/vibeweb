@@ -54,13 +54,13 @@ describe("tenant routes", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("DELETE /tenants/:id soft-deletes tenant", async () => {
+  it("DELETE /tenants/:id deletes tenant", async () => {
     const create = await app.inject({ method: "POST", url: "/tenants", payload: { subdomain: "del", name: "Del" } });
     const tenant = create.json();
     const res = await app.inject({ method: "DELETE", url: `/tenants/${tenant.id}` });
     expect(res.statusCode).toBe(204);
     const get = await app.inject({ method: "GET", url: `/tenants/${tenant.id}` });
-    expect(get.json().status).toBe("deleted");
+    expect(get.statusCode).toBe(404);
   });
 
   it("POST /tenants/:id/deploy copies preview to public", async () => {

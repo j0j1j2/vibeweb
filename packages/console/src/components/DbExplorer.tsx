@@ -44,7 +44,7 @@ export function DbExplorer({ tenantId: propTenantId }: { tenantId?: string }) {
   };
 
   const selectTable = (name: string) => {
-    const q = `SELECT * FROM ${name} LIMIT 100`;
+    const q = `SELECT * FROM "${name}" LIMIT 100`;
     setSql(q);
     runQuery(q);
   };

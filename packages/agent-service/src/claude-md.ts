@@ -183,7 +183,7 @@ function readDbTables(dbPath: string): string {
     if (tables.length === 0) { db.close(); return ""; }
     const lines: string[] = [];
     for (const t of tables) {
-      const cols = db.prepare(`PRAGMA table_info(${t.name})`).all() as { name: string; type: string }[];
+      const cols = db.prepare(`PRAGMA table_info("${t.name}")`).all() as { name: string; type: string }[];
       lines.push(`- ${t.name} (${cols.map(c => c.name).join(", ")})`);
     }
     db.close();
