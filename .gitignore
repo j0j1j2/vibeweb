@@ -1,5 +1,37 @@
+# Dependencies
 node_modules/
+package-lock.json
+
+# Build output
 dist/
+*.tsbuildinfo
+
+# Runtime data
 data/tenants/
 *.db
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Docker volumes
+docker-data/
+
+# Superpowers
 .superpowers/
