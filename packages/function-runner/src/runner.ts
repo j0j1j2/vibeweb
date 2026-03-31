@@ -3,9 +3,12 @@ import fs from "node:fs";
 import type { FunctionRequest, FunctionResponse } from "@vibeweb/shared";
 import { runInContainer } from "./container.js";
 
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+
 export async function handleFunctionRequest(
   tenantId: string, apiPath: string, request: FunctionRequest, tenantsDir: string
 ): Promise<FunctionResponse> {
+  if (!UUID_RE.test(tenantId)) return { status: 400, headers: {}, body: { error: "Invalid tenant ID" } };
   const functionPath = `api/${apiPath}.js`;
   const functionsDir = path.join(tenantsDir, tenantId, "functions");
   const dbDir = path.join(tenantsDir, tenantId, "db");

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { readFile, deleteFile, uploadFile } from "@/api";
 import { FileCode, Download, Trash2, Image, FileText, Pencil, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const LANG_MAP: Record<string, string> = {
   html: "HTML", htm: "HTML", xml: "XML", svg: "SVG",
@@ -87,6 +88,7 @@ export function FileViewer({
   const [saveError, setSaveError] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { t } = useTranslation();
 
   const ext = (filePath.split(".").pop() ?? "").toLowerCase();
   const isImage = IMAGE_EXTS.has(ext);
@@ -138,7 +140,7 @@ export function FileViewer({
       setEditing(false);
       setEditContent("");
     } catch {
-      setSaveError("Failed to save file");
+      setSaveError(t("files.failedSave"));
     } finally {
       setSaving(false);
     }
@@ -148,7 +150,7 @@ export function FileViewer({
     setDeleting(true);
     setDeleteError("");
     try { await deleteFile(tenantId, filePath); onDeleted?.(); }
-    catch { setDeleteError("Failed to delete file"); setShowDeleteConfirm(false); }
+    catch { setDeleteError(t("files.failedDelete")); setShowDeleteConfirm(false); }
     finally { setDeleting(false); }
   };
 
@@ -168,29 +170,29 @@ export function FileViewer({
           {editing ? (
             <>
               <button onClick={handleSave} disabled={saving} className="px-2 py-0.5 rounded text-[12px] font-medium bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50 transition-colors">
-                {saving ? "Saving…" : "Save"}
+                {saving ? t("common.saving") : t("common.save")}
               </button>
-              <button onClick={handleCancelEdit} disabled={saving} title="Cancel" aria-label="Cancel edit" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50">
+              <button onClick={handleCancelEdit} disabled={saving} title={t("files.cancelEdit")} aria-label={t("files.cancelEdit")} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50">
                 <X className="w-3.5 h-3.5" />
               </button>
             </>
           ) : showDeleteConfirm ? (
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-red-600 text-xs">Delete this file?</span>
-              <button onClick={handleDelete} disabled={deleting} className="px-2 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors disabled:opacity-50">Yes</button>
-              <button onClick={() => setShowDeleteConfirm(false)} className="px-2 py-1 bg-gray-200 text-gray-600 rounded text-xs font-medium hover:bg-gray-300 transition-colors">No</button>
+              <span className="text-red-600 text-xs">{t("files.confirmDelete")}</span>
+              <button onClick={handleDelete} disabled={deleting} className="px-2 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors disabled:opacity-50">{t("common.yes")}</button>
+              <button onClick={() => setShowDeleteConfirm(false)} className="px-2 py-1 bg-gray-200 text-gray-600 rounded text-xs font-medium hover:bg-gray-300 transition-colors">{t("common.no")}</button>
             </div>
           ) : (
             <>
               {!isImage && (
-                <button onClick={handleEdit} title="Edit file" aria-label="Edit file" className="p-1 rounded text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+                <button onClick={handleEdit} title={t("files.editFile")} aria-label={t("files.editFile")} className="p-1 rounded text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
               )}
-              <button onClick={handleDownload} title="Download file" aria-label="Download file" className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+              <button onClick={handleDownload} title={t("files.downloadFile")} aria-label={t("files.downloadFile")} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
                 <Download className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => setShowDeleteConfirm(true)} title="Delete file" aria-label="Delete file" className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <button onClick={() => setShowDeleteConfirm(true)} title={t("files.deleteFile")} aria-label={t("files.deleteFile")} className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </>
@@ -199,10 +201,10 @@ export function FileViewer({
       </div>
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="p-4 text-sm text-gray-300">Loading...</div>
+          <div className="p-4 text-sm text-gray-300">{t("common.loading")}</div>
         ) : loadError ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
-            <p className="text-sm text-red-500 font-medium">Failed to load file</p>
+            <p className="text-sm text-red-500 font-medium">{t("files.failedLoad")}</p>
             <button
               onClick={() => {
                 setLoadError(false);
@@ -214,7 +216,7 @@ export function FileViewer({
               }}
               className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
             >
-              Retry
+              {t("common.retry")}
             </button>
           </div>
         ) : isImage ? (

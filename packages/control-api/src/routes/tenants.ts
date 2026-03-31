@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { SUBDOMAIN_REGEX, SUBDOMAIN_MAX_LENGTH, getTenantPaths, initTenantDir, atomicDeploy } from "@vibeweb/shared";
+import { SUBDOMAIN_REGEX, SUBDOMAIN_MAX_LENGTH, RESERVED_SUBDOMAIN_PREFIXES, RESERVED_SUBDOMAINS, getTenantPaths, initTenantDir, atomicDeploy } from "@vibeweb/shared";
 import type { Db } from "../db.js";
 
 interface TenantRoutesOpts { db: Db; tenantsDir: string; }
@@ -16,6 +16,8 @@ export async function tenantRoutes(app: FastifyInstance, opts: TenantRoutesOpts)
     const { subdomain, name } = req.body;
     if (!subdomain || !name) return reply.status(400).send({ error: "subdomain and name are required" });
     if (!SUBDOMAIN_REGEX.test(subdomain) || subdomain.length > SUBDOMAIN_MAX_LENGTH) return reply.status(400).send({ error: "invalid subdomain format" });
+    if (RESERVED_SUBDOMAIN_PREFIXES.some((p) => subdomain.startsWith(p))) return reply.status(400).send({ error: "subdomain uses a reserved prefix" });
+    if (RESERVED_SUBDOMAINS.includes(subdomain)) return reply.status(400).send({ error: "subdomain is reserved" });
     const existing = db.getTenantBySubdomain(subdomain);
     if (existing) return reply.status(409).send({ error: "subdomain already taken" });
     const tenant = db.createTenant({ subdomain, name });

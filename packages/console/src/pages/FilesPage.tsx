@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { FileTree } from "@/components/FileTree";
 import { FileViewer } from "@/components/FileViewer";
 import { FolderOpen, Upload, FilePlus } from "lucide-react";
 import { listFiles, uploadFile } from "@/api";
 
 export function FilesPage() {
+  const { t } = useTranslation();
   const { tenantId } = useParams<{ tenantId: string }>();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [hasFiles, setHasFiles] = useState(true);
@@ -66,7 +68,7 @@ export function FilesPage() {
             className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <Upload className="w-3.5 h-3.5" />
-            Upload
+            {t("common.upload")}
           </button>
           {showNewFile ? (
             <div className="flex items-center gap-1.5">
@@ -74,7 +76,7 @@ export function FilesPage() {
                 value={newFilePath}
                 onChange={(e) => setNewFilePath(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleNewFile(); if (e.key === "Escape") { setShowNewFile(false); setNewFilePath(""); } }}
-                placeholder="public/about.html"
+                placeholder={t("files.newFilePlaceholder")}
                 className="px-2 py-1 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100 w-44"
                 autoFocus
               />
@@ -82,13 +84,13 @@ export function FilesPage() {
                 onClick={handleNewFile}
                 className="px-2 py-1 text-[12px] bg-violet-600 text-white rounded-md hover:bg-violet-500 transition-colors"
               >
-                Create
+                {t("common.create")}
               </button>
               <button
                 onClick={() => { setShowNewFile(false); setNewFilePath(""); }}
                 className="px-2 py-1 text-[12px] bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           ) : (
@@ -97,14 +99,14 @@ export function FilesPage() {
               className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
             >
               <FilePlus className="w-3.5 h-3.5" />
-              New File
+              {t("files.newFile")}
             </button>
           )}
         </div>
         <div className="flex flex-col items-center justify-center flex-1 text-gray-300 gap-2">
           <FolderOpen className="w-10 h-10" />
-          <p className="text-sm">No files yet</p>
-          <p className="text-xs text-gray-300">Use the chat to create your first page</p>
+          <p className="text-sm">{t("files.noFiles")}</p>
+          <p className="text-xs text-gray-300">{t("files.noFilesDesc")}</p>
         </div>
       </div>
     );
@@ -118,7 +120,7 @@ export function FilesPage() {
           className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
         >
           <Upload className="w-3.5 h-3.5" />
-          Upload
+          {t("common.upload")}
         </button>
         {showNewFile ? (
           <div className="flex items-center gap-1.5">
@@ -126,7 +128,7 @@ export function FilesPage() {
               value={newFilePath}
               onChange={(e) => setNewFilePath(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleNewFile(); if (e.key === "Escape") { setShowNewFile(false); setNewFilePath(""); } }}
-              placeholder="public/about.html"
+              placeholder={t("files.newFilePlaceholder")}
               className="px-2 py-1 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100 w-44"
               autoFocus
             />
@@ -134,13 +136,13 @@ export function FilesPage() {
               onClick={handleNewFile}
               className="px-2 py-1 text-[12px] bg-violet-600 text-white rounded-md hover:bg-violet-500 transition-colors"
             >
-              Create
+              {t("common.create")}
             </button>
             <button
               onClick={() => { setShowNewFile(false); setNewFilePath(""); }}
               className="px-2 py-1 text-[12px] bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         ) : (
@@ -149,7 +151,7 @@ export function FilesPage() {
             className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <FilePlus className="w-3.5 h-3.5" />
-            New File
+            {t("files.newFile")}
           </button>
         )}
       </div>
@@ -168,7 +170,7 @@ export function FilesPage() {
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-2">
               <FolderOpen className="w-8 h-8" />
-              <p className="text-sm">Select a file to view</p>
+              <p className="text-sm">{t("files.selectFile")}</p>
             </div>
           )}
         </div>

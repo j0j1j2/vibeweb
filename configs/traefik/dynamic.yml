@@ -7,89 +7,75 @@ http:
           - "X-Tenant-Id"
 
   routers:
+    # Priority map: console=control-api(200) > function-runner(150) > preview-ws(140) > preview-static(100) > agent-ws(90) > site-server(1)
+
     console:
       rule: "Host(`console.vibeweb.localhost`)"
       service: console
-      entryPoints:
-        - web
+      entryPoints: [web]
       priority: 200
 
     control-api:
       rule: "Host(`vibeweb.localhost`)"
       service: control-api
-      entryPoints:
-        - web
+      entryPoints: [web]
+      priority: 200
 
+    # /api/ routes to function-runner for both preview and live subdomains
     function-runner:
-      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/api/`)"
+      rule: "HostRegexp(`^(preview-)?[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/api/`)"
       service: function-runner
-      entryPoints:
-        - web
-      middlewares:
-        - tenant-auth
+      entryPoints: [web]
+      middlewares: [tenant-auth]
+      priority: 150
 
+    # WebSocket for live-reload (both preview and live subdomains)
     preview-ws:
-      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/ws`)"
+      rule: "HostRegexp(`^(preview-)?[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/ws`)"
       service: preview-server
-      entryPoints:
-        - web
-      middlewares:
-        - tenant-auth
+      entryPoints: [web]
+      middlewares: [tenant-auth]
+      priority: 140
 
+    # Preview: subdomain-based routing — all navigation within iframe stays on preview subdomain
     preview-static:
-      rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && Query(`preview`, `true`)"
+      rule: "HostRegexp(`^preview-[a-z0-9-]+\\.vibeweb\\.localhost$`)"
       service: preview-server
-      entryPoints:
-        - web
-      middlewares:
-        - tenant-auth
+      entryPoints: [web]
+      middlewares: [tenant-auth]
       priority: 100
 
     agent-ws:
       rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/agent`)"
       service: agent-service
-      entryPoints:
-        - web
-      middlewares:
-        - tenant-auth
+      entryPoints: [web]
+      middlewares: [tenant-auth]
       priority: 90
 
+    # Fallback: published site served by nginx
     site-server:
       rule: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`)"
       service: site-server
-      entryPoints:
-        - web
-      middlewares:
-        - tenant-auth
+      entryPoints: [web]
+      middlewares: [tenant-auth]
       priority: 1
 
   services:
     control-api:
       loadBalancer:
-        servers:
-          - url: "http://control-api:1919"
-
+        servers: [{ url: "http://control-api:1919" }]
     function-runner:
       loadBalancer:
-        servers:
-          - url: "http://function-runner:3001"
-
+        servers: [{ url: "http://function-runner:3001" }]
     preview-server:
       loadBalancer:
-        servers:
-          - url: "http://preview-server:3002"
-
+        servers: [{ url: "http://preview-server:3002" }]
     agent-service:
       loadBalancer:
-        servers:
-          - url: "http://agent-service:3003"
-
+        servers: [{ url: "http://agent-service:3003" }]
     console:
       loadBalancer:
-        servers:
-          - url: "http://console:80"
-
+        servers: [{ url: "http://console:80" }]
     site-server:
       loadBalancer:
-        servers:
-          - url: "http://nginx:80"
+        servers: [{ url: "http://nginx:80" }]

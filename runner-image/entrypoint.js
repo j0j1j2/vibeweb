@@ -51,7 +51,7 @@ async function main() {
     path: process.env.REQ_PATH || "/",
     query: JSON.parse(process.env.REQ_QUERY || "{}"),
     headers: JSON.parse(process.env.REQ_HEADERS || "{}"),
-    body: process.env.REQ_BODY || "",
+    body: process.env.REQ_BODY_B64 ? Buffer.from(process.env.REQ_BODY_B64, "base64").toString("utf-8") : (process.env.REQ_BODY || ""),
   };
 
   try {

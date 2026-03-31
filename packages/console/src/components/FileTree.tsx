@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { listFiles } from "@/api";
 import { File, Folder, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ function buildTree(files: FileEntry[]): TreeNode[] {
 }
 
 export function FileTree({ tenantId, onSelect, selectedPath, refreshKey }: { tenantId: string; onSelect?: (path: string) => void; selectedPath?: string; refreshKey?: number; }) {
+  const { t } = useTranslation();
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["public", "functions"]));
 
@@ -38,7 +40,7 @@ export function FileTree({ tenantId, onSelect, selectedPath, refreshKey }: { ten
   return (
     <div className="p-2 text-[13px] overflow-y-auto h-full">
       {tree.map((node) => <TreeItem key={node.path} node={node} expanded={expanded} toggleExpand={toggleExpand} onSelect={onSelect} selectedPath={selectedPath} depth={0} />)}
-      {files.length === 0 && <div className="text-gray-300 text-center mt-12">No files</div>}
+      {files.length === 0 && <div className="text-gray-300 text-center mt-12">{t("files.noFilesTree")}</div>}
     </div>
   );
 }

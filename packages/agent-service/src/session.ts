@@ -53,28 +53,51 @@ export class SessionManager {
     const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
     const networkName = process.env.DOCKER_NETWORK ?? "vibeweb_default";
 
+    // Mount ONLY this tenant's subdirectories — isolate from other tenants
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
       Env: [
         ...env,
-        `WORKSPACE=/data/tenants/${tenantId}/preview`,
+        `WORKSPACE=/tenant/preview`,
       ],
       ExposedPorts: { [`${SESSION_BRIDGE_PORT}/tcp`]: {} },
       HostConfig: {
         Mounts: [
-          { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
+          {
+            Type: "volume" as const,
+            Source: volumeName,
+            Target: "/tenant/preview",
+            ReadOnly: false,
+            VolumeOptions: { Subpath: `${tenantId}/preview` } as any,
+          },
+          {
+            Type: "volume" as const,
+            Source: volumeName,
+            Target: "/tenant/db",
+            ReadOnly: false,
+            VolumeOptions: { Subpath: `${tenantId}/db` } as any,
+          },
+          {
+            Type: "volume" as const,
+            Source: volumeName,
+            Target: "/tenant/claude-auth",
+            ReadOnly: true,
+            VolumeOptions: { Subpath: `${tenantId}/claude-auth` } as any,
+          },
         ],
         Memory: parseMemoryLimit(SESSION_MEMORY_LIMIT),
         NanoCpus: SESSION_CPU_LIMIT * 1e9,
         NetworkMode: networkName,
+        PidsLimit: 512,
       },
       // Root sets up dirs/perms, then drops to 'vibe' user for claude
       Cmd: ["sh", "-c", `
-        mkdir -p /home/vibe/.claude /data/tenants/${tenantId}/claude-auth /data/tenants/${tenantId}/preview &&
-        cp -a /data/tenants/${tenantId}/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
-        test -f /data/tenants/${tenantId}/claude-auth/.claude.json && cp /data/tenants/${tenantId}/claude-auth/.claude.json /home/vibe/.claude.json 2>/dev/null;
-        chown -R vibe:vibe /home/vibe /data/tenants/${tenantId}/preview /data/tenants/${tenantId}/claude-auth 2>/dev/null;
-        exec su vibe -c "HOME=/home/vibe WORKSPACE=/data/tenants/${tenantId}/preview BRIDGE_PORT=${SESSION_BRIDGE_PORT} NODE_PATH=/opt/libs/node_modules CLAUDE_CODE_OAUTH_TOKEN=\${CLAUDE_CODE_OAUTH_TOKEN:-} ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY:-} node /opt/bridge/bridge.js"
+        mkdir -p /home/vibe/.claude /tenant/preview /tenant/db /data &&
+        cp -a /tenant/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
+        test -f /tenant/claude-auth/.claude.json && cp /tenant/claude-auth/.claude.json /home/vibe/.claude.json 2>/dev/null;
+        chown -R vibe:vibe /home/vibe /tenant/preview /tenant/db 2>/dev/null;
+        ln -sf /tenant/db /data/db;
+        exec su vibe -c "HOME=/home/vibe WORKSPACE=/tenant/preview BRIDGE_PORT=${SESSION_BRIDGE_PORT} NODE_PATH=/opt/libs/node_modules CLAUDE_CODE_OAUTH_TOKEN=\${CLAUDE_CODE_OAUTH_TOKEN:-} ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY:-} node /opt/bridge/bridge.js"
       `],
       Labels: {
         "vibeweb.role": "agent-session",

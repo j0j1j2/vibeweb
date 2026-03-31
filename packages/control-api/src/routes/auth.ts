@@ -12,7 +12,9 @@ export async function authRoutes(app: FastifyInstance, opts: AuthRoutesOpts): Pr
     if (!forwardedHost) return reply.status(400).send({ error: "missing x-forwarded-host header" });
     const parts = forwardedHost.split(".");
     if (parts.length < 3) return reply.status(404).send({ error: "no subdomain" });
-    const subdomain = parts[0];
+    let subdomain = parts[0];
+    // Strip "preview-" prefix so preview subdomains resolve to the same tenant
+    if (subdomain.startsWith("preview-")) subdomain = subdomain.slice(8);
     const tenant = db.getTenantBySubdomain(subdomain);
     if (!tenant) return reply.status(404).send({ error: "tenant not found" });
     reply.header("x-tenant-id", tenant.id);

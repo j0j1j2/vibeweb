@@ -15,6 +15,8 @@ export const RUNNER_IMAGE = "vibeweb-runner:node20";
 
 export const SUBDOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 export const SUBDOMAIN_MAX_LENGTH = 63;
+export const RESERVED_SUBDOMAIN_PREFIXES = ["preview-", "api-", "admin-", "www-"];
+export const RESERVED_SUBDOMAINS = ["console", "vibeweb", "app", "mail", "ftp"];
 
 export const AGENT_SERVICE_PORT = 3003;
 export const SESSION_IMAGE = "vibeweb-session:latest";

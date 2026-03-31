@@ -27,7 +27,7 @@ const proxies = new Map<string, SessionProxy>();
 
 app.get("/health", async () => ({ status: "ok" }));
 
-const UUID_RE = /^[a-f0-9-]{36}$/;
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 function isValidTenantId(id: string): boolean { return UUID_RE.test(id); }
 
 // Track active login containers per tenant (container + stdin stream)
@@ -54,16 +54,25 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
       Cmd: ["sh", "-c", `
-        mkdir -p /data/tenants/${tenantId}/claude-auth /home/vibe/.claude &&
-        cp -a /data/tenants/${tenantId}/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
-        chown -R vibe:vibe /home/vibe /data/tenants/${tenantId}/claude-auth 2>/dev/null;
+        mkdir -p /tenant/claude-auth /home/vibe/.claude &&
+        cp -a /tenant/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
+        chown -R vibe:vibe /home/vibe /tenant/claude-auth 2>/dev/null;
         exec su vibe -c "HOME=/home/vibe claude setup-token"
       `],
       Env: [`HOME=/root`],
       HostConfig: {
         Mounts: [
-          { Type: "volume" as const, Source: volumeName, Target: "/data/tenants", ReadOnly: false },
+          {
+            Type: "volume" as const,
+            Source: volumeName,
+            Target: "/tenant/claude-auth",
+            ReadOnly: false,
+            VolumeOptions: { Subpath: `${tenantId}/claude-auth` } as any,
+          },
         ],
+        Memory: 256 * 1024 * 1024,
+        NanoCpus: 0.5 * 1e9,
+        PidsLimit: 64,
       },
       Labels: { "vibeweb.role": "auth-login", "vibeweb.tenant": tenantId },
       Tty: true,
@@ -108,8 +117,11 @@ app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async
       const words = text.split(/[\s\n\r]+/);
       const tokenWord = words.find(w => w.startsWith("sk-ant-oat"));
       if (tokenWord) {
-        // Clean: only keep base64url + hyphen chars
-        const token = tokenWord.replace(/[^A-Za-z0-9_-]/g, "");
+        // setup-token may output "sk-ant-oat...AAStored credentials..." with no separator
+        // Strip known CLI output suffixes that get concatenated to the token
+        const token = tokenWord
+          .replace(/[^A-Za-z0-9_-]/g, "")
+          .replace(/(Stored?|credentials|Success|Done|saved).*$/i, "");
         const authDir = path.join(tenantsDir, tenantId, "claude-auth");
         fs.mkdirSync(authDir, { recursive: true });
         fs.writeFileSync(path.join(authDir, "oauth-token"), token);
@@ -268,16 +280,22 @@ const start = async () => {
   const server = app.server as http.Server;
   const wss = new WebSocketServer({ server, path: "/ws" });
 
-  wss.on("connection", (userWs: WebSocket) => {
+  wss.on("connection", (userWs: WebSocket, req: http.IncomingMessage) => {
     app.log.info("User WebSocket connected");
     let currentSessionId: string | null = null;
+    // Trust X-Tenant-Id from Traefik's forwardAuth — NOT the client message
+    const verifiedTenantId = req.headers["x-tenant-id"] as string | undefined;
 
     userWs.on("message", async (raw) => {
       try {
         const msg: WsMessage = JSON.parse(raw.toString());
 
         if (msg.type === "session.start") {
-          currentSessionId = await handleSessionStart(userWs, msg.tenantId!);
+          if (!verifiedTenantId) {
+            userWs.close(4001, "Missing tenant authentication");
+            return;
+          }
+          currentSessionId = await handleSessionStart(userWs, verifiedTenantId, msg.locale || "ko");
         } else if (msg.type === "message" && msg.sessionId) {
           handleUserMessage(msg.sessionId, msg);
           currentSessionId = msg.sessionId;
@@ -320,7 +338,8 @@ const start = async () => {
   app.log.info("Agent Service ready");
 };
 
-async function handleSessionStart(userWs: WebSocket, tenantId: string): Promise<string> {
+async function handleSessionStart(userWs: WebSocket, tenantId: string, locale: string = "ko"): Promise<string> {
+  if (!isValidTenantId(tenantId)) throw new Error("Invalid tenant ID");
   const sessionId = uuidv4();
 
   const authToken = resolveAuthToken(tenantId);
@@ -337,7 +356,7 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string): Promise<
   const dbDir = path.join(tenantsDir, tenantId, "db");
   fs.mkdirSync(previewDir, { recursive: true });
   fs.mkdirSync(dbDir, { recursive: true });
-  const claudeMd = generateClaudeMd(tenantId, previewDir, dbDir);
+  const claudeMd = generateClaudeMd(tenantId, previewDir, dbDir, locale);
 
   // Write CLAUDE.md to preview dir
   fs.writeFileSync(path.join(previewDir, "CLAUDE.md"), claudeMd);

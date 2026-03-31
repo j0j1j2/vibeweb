@@ -14,32 +14,47 @@ export interface RunFunctionOpts {
 
 export async function runInContainer(opts: RunFunctionOpts): Promise<FunctionResponse> {
   const { tenantId, functionPath, functionsDir, dbDir, request } = opts;
+  if (!/^[a-f0-9-]{36}$/.test(tenantId)) throw new Error("Invalid tenant ID");
 
-  // Compute paths relative to the named volume mount
-  const relFunctionsDir = functionsDir.replace(/.*\/tenants\//, "");
-  const relDbDir = dbDir.replace(/.*\/tenants\//, "");
+  const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
 
+  // Mount ONLY this tenant's subdirectories — not the entire volume
+  // "preview/functions" for code (read-only), "db" for database (read-write)
   const container = await docker.createContainer({
     Image: RUNNER_IMAGE,
     Env: [
       `FUNCTION_PATH=${functionPath}`,
-      `FUNCTIONS_DIR=/tenants/${relFunctionsDir}`,
-      `DB_DIR=/tenants/${relDbDir}`,
+      `FUNCTIONS_DIR=/tenant/preview/functions`,
+      `DB_DIR=/tenant/db`,
       `REQ_METHOD=${request.method}`,
       `REQ_PATH=${request.path}`,
       `REQ_QUERY=${JSON.stringify(request.query)}`,
       `REQ_HEADERS=${JSON.stringify(request.headers)}`,
-      `REQ_BODY=${request.body}`,
+      `REQ_BODY_B64=${Buffer.from(request.body || "").toString("base64")}`,
     ],
     HostConfig: {
       Mounts: [
-        { Type: "volume" as const, Source: process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data", Target: "/tenants", ReadOnly: false },
+        {
+          Type: "volume" as const,
+          Source: volumeName,
+          Target: "/tenant/preview/functions",
+          ReadOnly: true,
+          VolumeOptions: { Subpath: `${tenantId}/preview/functions` } as any,
+        },
+        {
+          Type: "volume" as const,
+          Source: volumeName,
+          Target: "/tenant/db",
+          ReadOnly: false,
+          VolumeOptions: { Subpath: `${tenantId}/db` } as any,
+        },
       ],
       Memory: parseMemoryLimit(FUNCTION_MEMORY_LIMIT),
       NanoCpus: FUNCTION_CPU_LIMIT * 1e9,
       NetworkMode: "none",
-      AutoRemove: true,
+      AutoRemove: false,
       ReadonlyRootfs: false,
+      PidsLimit: 256,
     },
     Labels: {
       "vibeweb.tenant": tenantId,
@@ -58,19 +73,23 @@ export async function runInContainer(opts: RunFunctionOpts): Promise<FunctionRes
 }
 
 async function waitForContainer(container: Docker.Container): Promise<FunctionResponse> {
-  await container.wait();
-  const logs = await container.logs({ stdout: true, stderr: true });
-  const output = logs.toString("utf-8").trim();
-  const lines = output.split("\n");
-  const lastLine = lines[lines.length - 1];
-  const jsonMatch = lastLine.match(/\{.*\}/);
-  if (!jsonMatch) {
-    return { status: 500, headers: {}, body: { error: "No response from function" } };
-  }
   try {
-    return JSON.parse(jsonMatch[0]) as FunctionResponse;
-  } catch {
-    return { status: 500, headers: {}, body: { error: "Invalid response from function" } };
+    await container.wait();
+    const logs = await container.logs({ stdout: true, stderr: true });
+    const output = logs.toString("utf-8").trim();
+    const lines = output.split("\n");
+    const lastLine = lines[lines.length - 1];
+    const jsonMatch = lastLine.match(/\{.*\}/);
+    if (!jsonMatch) {
+      return { status: 500, headers: {}, body: { error: "No response from function" } };
+    }
+    try {
+      return JSON.parse(jsonMatch[0]) as FunctionResponse;
+    } catch {
+      return { status: 500, headers: {}, body: { error: "Invalid response from function" } };
+    }
+  } finally {
+    try { await container.remove({ force: true }); } catch { }
   }
 }
 

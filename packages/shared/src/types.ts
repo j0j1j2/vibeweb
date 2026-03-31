@@ -52,4 +52,5 @@ export interface WsMessage {
   content?: string;
   data?: unknown;
   error?: string;
+  locale?: string;
 }

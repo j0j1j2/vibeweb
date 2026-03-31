@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { listFiles } from "@/api";
 import { useChatContext } from "@/components/ChatLayout";
 import { FileText, RefreshCw, ExternalLink, Sparkles, Plus, Pencil, Home, Trash2 } from "lucide-react";
 
 export function PreviewPage() {
+  const { t } = useTranslation();
   const { tenantId } = useParams<{ tenantId: string }>();
   const { subdomain, connected, sendMessage } = useChatContext();
   const [pages, setPages] = useState<{ name: string; path: string }[]>([]);
@@ -29,14 +31,14 @@ export function PreviewPage() {
   useEffect(() => { fetchPages(); }, [tenantId]);
 
   const previewUrl = subdomain
-    ? `http://${subdomain}.vibeweb.localhost/${selectedPage === "index.html" ? "" : selectedPage}?preview=true`
+    ? `http://preview-${subdomain}.vibeweb.localhost/${selectedPage === "index.html" ? "" : selectedPage}`
     : "";
 
   // Auto-refresh when Claude finishes a turn
   useEffect(() => {
     const handler = () => {
       if (iframeRef.current && subdomain) {
-        iframeRef.current.src = `http://${subdomain}.vibeweb.localhost/${selectedPage === "index.html" ? "" : selectedPage}?preview=true&_t=${Date.now()}`;
+        iframeRef.current.src = `http://preview-${subdomain}.vibeweb.localhost/${selectedPage === "index.html" ? "" : selectedPage}?_t=${Date.now()}`;
       }
       fetchPages();
     };
@@ -48,16 +50,16 @@ export function PreviewPage() {
     if (!newPageName.trim()) return;
     const name = newPageName.trim();
     const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
-    sendMessage(`Create a new page called "${name}" (${slug}.html) and add a link to it in the navigation menu of the homepage.`);
+    sendMessage(t("preview.addPageMsg", { name, slug }));
     setShowAddPage(false);
     setNewPageName("");
   };
 
   const handleEditPage = (pageName: string) => {
-    sendMessage(`Edit the ${pageName === "index.html" ? "homepage" : pageName.replace(".html", "") + " page"}. What would you like to change?`);
+    sendMessage(t("preview.editPageMsg", { page: pageName === "index.html" ? t("preview.homepage") : pageName.replace(".html", "") }));
   };
 
-  if (!subdomain) return <div className="flex items-center justify-center h-full text-gray-300">Loading...</div>;
+  if (!subdomain) return <div className="flex items-center justify-center h-full text-gray-300">{t("common.loading")}</div>;
 
   // Welcome screen for new sites
   if (hasContent !== true) {
@@ -66,16 +68,16 @@ export function PreviewPage() {
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mb-6 shadow-lg shadow-violet-500/20">
           <Sparkles className="w-8 h-8 text-white" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Welcome to your site!</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{t("preview.welcome")}</h2>
         <p className="text-gray-400 max-w-md mb-4">
-          Use the chat on the right to start building. Just describe what you want and AI will create it for you.
+          {t("preview.welcomeDesc")}
         </p>
         <div className="flex items-center gap-2 text-sm text-violet-600">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
           </span>
-          Try the suggestions in the chat panel →
+          {t("preview.welcomeHint")}
         </div>
       </div>
     );
@@ -86,7 +88,7 @@ export function PreviewPage() {
       {/* Pages sidebar — always visible */}
       <div className="w-[160px] border-r border-gray-100 bg-gray-50/30 flex flex-col flex-shrink-0">
         <div className="px-3 py-3 flex-1 overflow-y-auto">
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Pages</div>
+          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">{t("preview.pages")}</div>
           {pages.map((p) => (
             <div
               key={p.path}
@@ -101,12 +103,12 @@ export function PreviewPage() {
                 className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
               >
                 {p.name === "index.html" ? <Home className="w-3.5 h-3.5 flex-shrink-0" /> : <FileText className="w-3.5 h-3.5 flex-shrink-0" />}
-                <span className="truncate">{p.name === "index.html" ? "Home" : p.name.replace(".html", "")}</span>
+                <span className="truncate">{p.name === "index.html" ? t("preview.home") : p.name.replace(".html", "")}</span>
               </button>
               <button
                 onClick={() => handleEditPage(p.name)}
-                title="Edit this page"
-                aria-label={`Edit ${p.name === "index.html" ? "Home" : p.name.replace(".html", "")} page`}
+                title={t("preview.editPage")}
+                aria-label={`${t("preview.editPage")} - ${p.name === "index.html" ? t("preview.home") : p.name.replace(".html", "")}`}
                 className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-violet-600 transition-all"
               >
                 <Pencil className="w-3 h-3" />
@@ -114,7 +116,7 @@ export function PreviewPage() {
             </div>
           ))}
           {pages.length === 0 && (
-            <p className="text-[12px] text-gray-300 px-2">No pages yet</p>
+            <p className="text-[12px] text-gray-300 px-2">{t("preview.noPages")}</p>
           )}
         </div>
         <div className="px-3 py-2 border-t border-gray-100">
@@ -124,7 +126,7 @@ export function PreviewPage() {
                 value={newPageName}
                 onChange={(e) => setNewPageName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleAddPage(); if (e.key === "Escape") { setShowAddPage(false); setNewPageName(""); } }}
-                placeholder="about, contact..."
+                placeholder={t("preview.addPagePlaceholder")}
                 className="w-full px-2 py-1 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100"
                 autoFocus
               />
@@ -133,13 +135,13 @@ export function PreviewPage() {
                   onClick={handleAddPage}
                   className="flex-1 px-2 py-1 text-[12px] bg-violet-600 text-white rounded-md hover:bg-violet-500 transition-colors"
                 >
-                  Create
+                  {t("common.create")}
                 </button>
                 <button
                   onClick={() => { setShowAddPage(false); setNewPageName(""); }}
                   className="flex-1 px-2 py-1 text-[12px] bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -150,7 +152,7 @@ export function PreviewPage() {
               className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-[12px] text-violet-600 hover:bg-violet-50 transition-colors disabled:opacity-40"
             >
               <Plus className="w-3.5 h-3.5" />
-              Add Page
+              {t("preview.addPage")}
             </button>
           )}
         </div>
@@ -162,13 +164,13 @@ export function PreviewPage() {
           <div className="flex-1 flex items-center gap-2 px-2.5 py-1 bg-gray-50 rounded-md border border-gray-100">
             <div className="w-2 h-2 rounded-full bg-emerald-400/80" />
             <span className="text-[11px] text-gray-400 font-mono truncate">
-              {subdomain}.vibeweb.site/{selectedPage === "index.html" ? "" : selectedPage}
+              preview-{subdomain}.vibeweb.site/{selectedPage === "index.html" ? "" : selectedPage}
             </span>
           </div>
-          <button onClick={() => { if (iframeRef.current) iframeRef.current.src = previewUrl; fetchPages(); }} aria-label="Refresh preview" className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={() => { if (iframeRef.current) iframeRef.current.src = previewUrl; fetchPages(); }} aria-label={t("preview.refreshPreview")} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
-          <a href={previewUrl} target="_blank" rel="noopener noreferrer" aria-label="Open in new tab" className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+          <a href={previewUrl} target="_blank" rel="noopener noreferrer" aria-label={t("preview.openNewTab")} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>

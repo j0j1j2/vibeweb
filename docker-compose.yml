@@ -62,8 +62,7 @@ services:
     volumes:
       - tenant-data:/data/tenants
       - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "3003:3003"
+    # Port 3003 NOT published — only reachable via Traefik (tenant-auth enforced)
     depends_on:
       - control-api
 

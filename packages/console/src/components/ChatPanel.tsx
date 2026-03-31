@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Send, Bot, User, Wrench } from "lucide-react";
 import Markdown from "react-markdown";
+import { useTranslation } from "react-i18next";
 
 interface Message {
   role: "user" | "assistant";
@@ -19,6 +20,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ messages, onSend, connected, loading, status }: ChatPanelProps) {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -41,7 +43,7 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
     <div className="flex flex-col h-full bg-gray-50/50 border-l border-gray-200">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" : "bg-gray-300"}`} />
-        <span className="text-[13px] font-medium text-gray-600">Vibe Editor</span>
+        <span className="text-[13px] font-medium text-gray-600">{t("chat.title")}</span>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -61,7 +63,7 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
                 </div>
               ) : msg.isError ? (
                 <div className="text-[13px] leading-relaxed text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                  <span className="font-medium">Error: </span>{msg.content}
+                  <span className="font-medium">{t("common.error")} </span>{msg.content}
                 </div>
               ) : (
                 <div className="text-[13px] leading-relaxed text-gray-700 prose prose-sm prose-gray max-w-none [&_pre]:bg-gray-50 [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:text-xs [&_code]:text-violet-600 [&_code]:text-xs [&_code]:bg-gray-50 [&_code]:px-1 [&_code]:rounded [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-medium">
@@ -71,20 +73,20 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
               )}
               {msg.toolUse && msg.toolUse.length > 0 && (
                 <div className="mt-2 space-y-1">
-                  {msg.toolUse.map((t, j) => {
+                  {msg.toolUse.map((tu, j) => {
                     const friendlyToolNames: Record<string, string> = {
-                      Write: "Updating file",
-                      Edit: "Editing file",
-                      Read: "Reading file",
-                      Bash: "Running command",
-                      Glob: "Searching files",
-                      Grep: "Searching content",
+                      Write: t("chat.tool.Write"),
+                      Edit: t("chat.tool.Edit"),
+                      Read: t("chat.tool.Read"),
+                      Bash: t("chat.tool.Bash"),
+                      Glob: t("chat.tool.Glob"),
+                      Grep: t("chat.tool.Grep"),
                     };
-                    const displayName = friendlyToolNames[t.tool] || t.tool;
+                    const displayName = friendlyToolNames[tu.tool] || tu.tool;
                     return (
                       <div key={j} className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md bg-gray-100 text-gray-500 font-mono border border-gray-200">
                         <Wrench className="w-3 h-3" />
-                        {displayName}{t.path ? ` ${t.path}` : ""}
+                        {displayName}{tu.path ? ` ${tu.path}` : ""}
                       </div>
                     );
                   })}
@@ -105,14 +107,14 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
         {messages.length === 0 && !status && (
           <div className="flex flex-col items-center justify-center h-full px-4 pb-8">
             <Bot className="w-10 h-10 text-violet-300 mb-3" />
-            <p className="text-sm font-medium text-gray-600 mb-1">What would you like to build?</p>
-            <p className="text-xs text-gray-300 mb-5 text-center">Click an example or type your own</p>
+            <p className="text-sm font-medium text-gray-600 mb-1">{t("chat.welcomeTitle")}</p>
+            <p className="text-xs text-gray-300 mb-5 text-center">{t("chat.welcomeSubtitle")}</p>
             <div className="space-y-2 w-full max-w-[280px]">
               {[
-                { icon: "🎨", text: "Create a landing page for my business" },
-                { icon: "🗄️", text: "Set up a database to store contacts" },
-                { icon: "🔌", text: "Build an API to manage my products" },
-                { icon: "📝", text: "Add a blog section to my site" },
+                { icon: "🎨", text: t("chat.example1") },
+                { icon: "🗄️", text: t("chat.example2") },
+                { icon: "🔌", text: t("chat.example3") },
+                { icon: "📝", text: t("chat.example4") },
               ].map((example) => (
                 <button
                   key={example.text}
@@ -135,7 +137,7 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={connected ? "Message... (Shift+Enter for newline)" : "Connecting..."}
+            placeholder={connected ? t("chat.placeholder") : t("chat.connecting")}
             disabled={!connected}
             className="w-full px-3 py-2.5 pr-12 bg-white border border-gray-200 rounded-lg text-[13px] text-gray-800 placeholder:text-gray-300 resize-none focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-colors"
             rows={3}
@@ -143,7 +145,7 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
           <button
             onClick={handleSend}
             disabled={!input.trim() || !connected || loading}
-            aria-label="Send message"
+            aria-label={t("chat.sendMessage")}
             className="absolute right-2 bottom-2 p-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-30 transition-colors"
           >
             <Send className="w-3.5 h-3.5" />

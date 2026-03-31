@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { ChatPanel } from "@/components/ChatPanel";
 import { getTenant } from "@/api";
 import { MessageSquare, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface Message {
   role: "user" | "assistant";
@@ -25,6 +26,7 @@ export function useChatContext() {
 }
 
 export function ChatLayout({ children }: { children: ReactNode }) {
+  const { t, i18n } = useTranslation();
   const { tenantId } = useParams<{ tenantId: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [connected, setConnected] = useState(false);
@@ -47,7 +49,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws/agent`);
     wsRef.current = ws;
 
-    ws.onopen = () => { ws.send(JSON.stringify({ type: "session.start", tenantId })); };
+    ws.onopen = () => { ws.send(JSON.stringify({ type: "session.start", tenantId, locale: i18n.language })); };
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
@@ -57,7 +59,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
 
         // Update status indicator based on event type
         if (d?.type === "system") {
-          setStatus("Connecting...");
+          setStatus(t("chat.status.connecting"));
         } else if (d?.type === "assistant") {
           const blocks = d.message?.content;
           if (Array.isArray(blocks)) {
@@ -68,20 +70,20 @@ export function ChatLayout({ children }: { children: ReactNode }) {
               const tool = blocks.find((b: any) => b.type === "tool_use");
               const toolName = tool?.name ?? "";
               const filePath = tool?.input?.file_path || tool?.input?.command || "";
-              if (toolName === "Write" || toolName === "Edit") setStatus(`Writing ${filePath.split("/").pop() || "file"}...`);
-              else if (toolName === "Read") setStatus(`Reading ${filePath.split("/").pop() || "file"}...`);
-              else if (toolName === "Bash") setStatus("Running command...");
-              else if (toolName) setStatus(`Using ${toolName}...`);
-              else setStatus("Working...");
+              if (toolName === "Write" || toolName === "Edit") { const filename = filePath.split("/").pop() || "file"; setStatus(t("chat.status.writing", { file: filename })); }
+              else if (toolName === "Read") { const filename = filePath.split("/").pop() || "file"; setStatus(t("chat.status.reading", { file: filename })); }
+              else if (toolName === "Bash") setStatus(t("chat.status.runningCommand"));
+              else if (toolName) setStatus(t("chat.status.usingTool", { tool: toolName }));
+              else setStatus(t("chat.status.working"));
             } else if (hasText) {
               setStatus("");
             } else if (hasThinking) {
-              setStatus("Thinking...");
+              setStatus(t("chat.status.thinking"));
             }
           }
         } else if (d?.type === "user") {
           // tool_result — Claude got the result, processing next step
-          setStatus("Working...");
+          setStatus(t("chat.status.working"));
         } else if (d?.type === "result") {
           setStatus("");
         }
@@ -147,7 +149,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
           setReconnectCount(c => c + 1);
         }, 2000);
       } else {
-        setStatus("Connection lost. Please refresh the page.");
+        setStatus(t("chat.status.connectionLost"));
       }
     };
 
@@ -160,7 +162,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   const handleSend = useCallback((content: string) => {
     if (!wsRef.current || !sessionId) return;
     setMessages((prev) => [...prev, { role: "user", content, toolUse: [], done: true }]);
-    setStatus("Thinking...");
+    setStatus(t("chat.status.thinking"));
     setLoading(true);
     wsRef.current.send(JSON.stringify({ type: "message", sessionId, content }));
   }, [sessionId]);
@@ -179,8 +181,8 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             <button
               onClick={() => setCollapsed(false)}
               className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-violet-600 transition-colors"
-              title="Open chat"
-              aria-label="Open chat"
+              title={t("chat.openChat")}
+              aria-label={t("chat.openChat")}
             >
               <PanelRightOpen className="w-4 h-4" />
             </button>
@@ -191,8 +193,8 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             <button
               onClick={() => setCollapsed(true)}
               className="absolute top-3 right-3 z-10 p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-              title="Collapse chat"
-              aria-label="Collapse chat"
+              title={t("chat.collapseChat")}
+              aria-label={t("chat.collapseChat")}
             >
               <PanelRightClose className="w-4 h-4" />
             </button>
