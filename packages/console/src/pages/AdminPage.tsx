@@ -61,9 +61,11 @@ export function AdminPage() {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteTenant(id);
+    try {
+      await deleteTenant(id);
+    } catch { /* ignore */ }
     setDeletingTenantId(null);
-    refresh();
+    await refresh();
   };
 
   return (

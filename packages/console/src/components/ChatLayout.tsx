@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { ChatPanel } from "@/components/ChatPanel";
-import { getTenant } from "@/api";
-import { MessageSquare, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { getTenant, switchSession, newSession, deleteSessionApi } from "@/api";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface Message {
@@ -37,6 +37,8 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef(0);
   const [reconnectCount, setReconnectCount] = useState(0);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [sessionTitle, setSessionTitle] = useState("");
 
   useEffect(() => {
     if (!tenantId) return;
@@ -53,7 +55,12 @@ export function ChatLayout({ children }: { children: ReactNode }) {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      if (msg.type === "session.ready") { setSessionId(msg.sessionId); setConnected(true); reconnectRef.current = 0; }
+      if (msg.type === "session.ready") {
+        setSessionId(msg.sessionId);
+        setConnected(true);
+        reconnectRef.current = 0;
+        if (msg.conversationId) setActiveConversationId(msg.conversationId);
+      }
       else if (msg.type === "stream") {
         const d = msg.data;
 
@@ -82,7 +89,6 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             }
           }
         } else if (d?.type === "user") {
-          // tool_result — Claude got the result, processing next step
           setStatus(t("chat.status.working"));
         } else if (d?.type === "result") {
           setStatus("");
@@ -124,8 +130,17 @@ export function ChatLayout({ children }: { children: ReactNode }) {
         });
         setLoading(false);
         setStatus("");
-        // Notify preview to refresh after Claude finishes a turn
         window.dispatchEvent(new Event("vibeweb:preview-refresh"));
+      } else if (msg.type === "session.closed") {
+        setConnected(false);
+        setSessionId(null);
+        setLoading(false);
+        if (reconnectRef.current < 5) {
+          reconnectRef.current += 1;
+          setTimeout(() => setReconnectCount(c => c + 1), 2000);
+        } else {
+          setStatus(t("chat.status.connectionLost"));
+        }
       } else if (msg.type === "error") {
         setMessages((prev) => [...prev, {
           role: "assistant",
@@ -141,13 +156,9 @@ export function ChatLayout({ children }: { children: ReactNode }) {
     ws.onclose = () => {
       setConnected(false);
       setSessionId(null);
-      // Auto-reconnect after 2 seconds (max 5 retries)
       if (reconnectRef.current < 5) {
         reconnectRef.current += 1;
-        setTimeout(() => {
-          // Re-trigger the effect by updating a reconnect counter
-          setReconnectCount(c => c + 1);
-        }, 2000);
+        setTimeout(() => setReconnectCount(c => c + 1), 2000);
       } else {
         setStatus(t("chat.status.connectionLost"));
       }
@@ -161,11 +172,53 @@ export function ChatLayout({ children }: { children: ReactNode }) {
 
   const handleSend = useCallback((content: string) => {
     if (!wsRef.current || !sessionId) return;
-    setMessages((prev) => [...prev, { role: "user", content, toolUse: [], done: true }]);
+    setMessages((prev) => {
+      if (prev.filter(m => m.role === "user").length === 0) {
+        setSessionTitle(content.slice(0, 50));
+      }
+      return [...prev, { role: "user", content, toolUse: [], done: true }];
+    });
     setStatus(t("chat.status.thinking"));
     setLoading(true);
     wsRef.current.send(JSON.stringify({ type: "message", sessionId, content }));
   }, [sessionId]);
+
+  const reconnectWs = useCallback(() => {
+    if (wsRef.current) {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "session.end", sessionId }));
+      }
+      wsRef.current.close();
+    }
+    reconnectRef.current = 0;
+    setReconnectCount(c => c + 1);
+  }, [sessionId]);
+
+  const handleSwitchSession = useCallback(async (conversationId: string) => {
+    if (!tenantId) return;
+    await switchSession(tenantId, conversationId);
+    setMessages([]);
+    setSessionTitle("");
+    setActiveConversationId(conversationId);
+    reconnectWs();
+  }, [tenantId, reconnectWs]);
+
+  const handleNewSession = useCallback(async () => {
+    if (!tenantId) return;
+    await newSession(tenantId);
+    setMessages([]);
+    setSessionTitle("");
+    setActiveConversationId(null);
+    reconnectWs();
+  }, [tenantId, reconnectWs]);
+
+  const handleDeleteSession = useCallback(async (conversationId: string) => {
+    if (!tenantId) return;
+    await deleteSessionApi(tenantId, conversationId);
+    if (activeConversationId === conversationId) {
+      await handleNewSession();
+    }
+  }, [tenantId, activeConversationId, handleNewSession]);
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -198,7 +251,11 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             >
               <PanelRightClose className="w-4 h-4" />
             </button>
-            <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} status={status} />
+            <ChatPanel
+              messages={messages} onSend={handleSend} connected={connected} loading={loading} status={status}
+              tenantId={tenantId} sessionTitle={sessionTitle} activeConversationId={activeConversationId}
+              onSwitchSession={handleSwitchSession} onNewSession={handleNewSession} onDeleteSession={handleDeleteSession}
+            />
           </div>
         )}
       </div>

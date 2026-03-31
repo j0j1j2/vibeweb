@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/auth";
@@ -15,10 +15,12 @@ export function LoginPage() {
   const { auth, login } = useAuth();
   const navigate = useNavigate();
 
-  if (auth) {
-    if (auth.isAdmin) navigate("/admin", { replace: true });
-    else if (auth.tenant) navigate(`/t/${auth.tenant.id}/preview`, { replace: true });
-  }
+  useEffect(() => {
+    if (auth) {
+      if (auth.isAdmin) navigate("/admin", { replace: true });
+      else if (auth.tenant) navigate(`/t/${auth.tenant.id}/preview`, { replace: true });
+    }
+  }, [auth, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

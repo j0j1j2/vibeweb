@@ -18,7 +18,12 @@ wss.on("connection", (socket) => {
 
   socket.on("message", (raw) => {
     const msg = JSON.parse(raw.toString());
-    if (msg.type === "message") {
+    if (msg.type === "init") {
+      if (msg.conversationId) {
+        conversationId = msg.conversationId;
+        console.log(`Resuming conversation: ${conversationId}`);
+      }
+    } else if (msg.type === "message") {
       runClaude(msg.content);
     } else if (msg.type === "session.end") {
       cleanup();

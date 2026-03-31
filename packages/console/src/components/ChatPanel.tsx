@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import { Send, Bot, User, Wrench } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Send, Bot, User, Wrench, ChevronDown, Plus, Trash2 } from "lucide-react";
 import Markdown from "react-markdown";
 import { useTranslation } from "react-i18next";
+import { getSessions } from "@/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,22 +12,60 @@ interface Message {
   isError?: boolean;
 }
 
+interface SessionItem {
+  conversationId: string;
+  title: string;
+  createdAt: string;
+  lastActivityAt: string;
+}
+
 interface ChatPanelProps {
   messages: Message[];
   onSend: (content: string) => void;
   connected: boolean;
   loading: boolean;
   status?: string;
+  tenantId?: string;
+  sessionTitle?: string;
+  activeConversationId?: string | null;
+  onSwitchSession?: (conversationId: string) => void;
+  onNewSession?: () => void;
+  onDeleteSession?: (conversationId: string) => void;
 }
 
-export function ChatPanel({ messages, onSend, connected, loading, status }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, connected, loading, status, tenantId, sessionTitle, activeConversationId, onSwitchSession, onNewSession, onDeleteSession }: ChatPanelProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [showSessions, setShowSessions] = useState(false);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    if (!showSessions) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowSessions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSessions]);
+
+  const loadSessions = async () => {
+    if (!tenantId) return;
+    try {
+      const data = await getSessions(tenantId);
+      setSessions(data.sessions ?? []);
+    } catch { setSessions([]); }
+  };
+
+  const toggleDropdown = () => {
+    if (!showSessions) loadSessions();
+    setShowSessions(!showSessions);
+  };
 
   const handleSend = () => {
     const text = input.trim();
@@ -39,11 +78,65 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  const timeAgo = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return "now";
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    const d = Math.floor(h / 24);
+    return `${d}d`;
+  };
+
+  const headerTitle = sessionTitle || t("chat.title");
+
   return (
     <div className="flex flex-col h-full bg-gray-50/50 border-l border-gray-200">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" : "bg-gray-300"}`} />
-        <span className="text-[13px] font-medium text-gray-600">{t("chat.title")}</span>
+      {/* Header with session dropdown */}
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2 relative" ref={dropdownRef}>
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" : "bg-gray-300"}`} />
+        <button onClick={toggleDropdown} className="flex items-center gap-1 min-w-0 flex-1 text-left">
+          <span className="text-[13px] font-medium text-gray-600 truncate">{headerTitle}</span>
+          <ChevronDown className={`w-3 h-3 text-gray-400 flex-shrink-0 transition-transform ${showSessions ? "rotate-180" : ""}`} />
+        </button>
+        <button
+          onClick={() => { onNewSession?.(); setShowSessions(false); }}
+          className="flex-shrink-0 p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-violet-600 transition-colors"
+          title={t("chat.newConversation")}
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+
+        {showSessions && (
+          <div className="absolute top-full left-0 right-0 mt-1 mx-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-64 overflow-y-auto">
+            {sessions.length > 0 ? sessions.map((s) => (
+              <div
+                key={s.conversationId}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer group"
+                onClick={() => { onSwitchSession?.(s.conversationId); setShowSessions(false); }}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${activeConversationId === s.conversationId ? "bg-violet-500" : "bg-gray-300"}`} />
+                <span className="text-[12px] text-gray-700 truncate flex-1">{s.title}</span>
+                <span className="text-[10px] text-gray-300 flex-shrink-0">{timeAgo(s.lastActivityAt)}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm(t("chat.deleteSessionConfirm"))) {
+                      onDeleteSession?.(s.conversationId);
+                      setSessions(prev => prev.filter(x => x.conversationId !== s.conversationId));
+                    }
+                  }}
+                  className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            )) : (
+              <div className="px-3 py-4 text-center text-[12px] text-gray-400">{t("chat.noSessions")}</div>
+            )}
+          </div>
+        )}
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -75,12 +168,8 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
                 <div className="mt-2 space-y-1">
                   {msg.toolUse.map((tu, j) => {
                     const friendlyToolNames: Record<string, string> = {
-                      Write: t("chat.tool.Write"),
-                      Edit: t("chat.tool.Edit"),
-                      Read: t("chat.tool.Read"),
-                      Bash: t("chat.tool.Bash"),
-                      Glob: t("chat.tool.Glob"),
-                      Grep: t("chat.tool.Grep"),
+                      Write: t("chat.tool.Write"), Edit: t("chat.tool.Edit"), Read: t("chat.tool.Read"),
+                      Bash: t("chat.tool.Bash"), Glob: t("chat.tool.Glob"), Grep: t("chat.tool.Grep"),
                     };
                     const displayName = friendlyToolNames[tu.tool] || tu.tool;
                     return (
@@ -95,7 +184,6 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
             </div>
           </div>
         ))}
-        {/* Status indicator while Claude is working */}
         {status && (
           <div className="flex items-center gap-2.5 px-2 py-2">
             <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-violet-100">
@@ -162,32 +250,21 @@ function TypedMarkdown({ content, animate }: { content: string; animate: boolean
   const indexRef = useRef(0);
 
   useEffect(() => {
-    if (!animate) {
-      setDisplayed(content);
-      return;
-    }
-    // New content arrived — type it out
+    if (!animate) { setDisplayed(content); return; }
     targetRef.current = content;
     if (indexRef.current > content.length) indexRef.current = content.length;
-
     const interval = setInterval(() => {
       if (indexRef.current < targetRef.current.length) {
-        // Show multiple chars per tick for speed
         const step = Math.min(3, targetRef.current.length - indexRef.current);
         indexRef.current += step;
         setDisplayed(targetRef.current.substring(0, indexRef.current));
       }
     }, 15);
-
     return () => clearInterval(interval);
   }, [content, animate]);
 
-  // Once done, show full content
   useEffect(() => {
-    if (!animate && content) {
-      setDisplayed(content);
-      indexRef.current = content.length;
-    }
+    if (!animate && content) { setDisplayed(content); indexRef.current = content.length; }
   }, [animate, content]);
 
   return <Markdown>{displayed}</Markdown>;

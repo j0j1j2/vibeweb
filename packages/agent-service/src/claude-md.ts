@@ -52,8 +52,8 @@ Create or edit pages in \`./public/\`.
     ? `### 🗄️ 스킬: 데이터베이스 관리
 SQLite 사용. DB 경로: \`/data/db/tenant.db\`
 
-**⚠️ node-sqlite3-wasm 사용을 강력히 권장합니다.**
-네이티브 바이너리 의존성이 없어 컨테이너 환경에서 안정적으로 동작합니다. better-sqlite3도 사용 가능하지만, 호환성 문제가 발생할 수 있습니다.
+**node-sqlite3-wasm을 사용하세요.**
+네이티브 바이너리 의존성이 없어 컨테이너 환경에서 안정적으로 동작합니다. 런타임에 사전 설치되어 있어 별도 npm install 없이 바로 사용 가능합니다.
 
 \`\`\`js
 import sqlite3 from "node-sqlite3-wasm";
@@ -68,8 +68,8 @@ const db = new sqlite3.Database("/data/db/tenant.db");
     : `### 🗄️ Skill: Manage Database
 Use SQLite. DB path: \`/data/db/tenant.db\`
 
-**⚠️ Strongly recommended: use node-sqlite3-wasm.**
-No native binary dependencies — works reliably in containerized environments. better-sqlite3 is also available but may have compatibility issues.
+**Use node-sqlite3-wasm.**
+No native binary dependencies — works reliably in containerized environments. Pre-installed in the runtime, no npm install needed.
 
 \`\`\`js
 import sqlite3 from "node-sqlite3-wasm";

@@ -114,6 +114,11 @@
     "sendMessage": "메시지 전송",
     "openChat": "채팅 열기",
     "collapseChat": "채팅 접기",
+    "newConversation": "새 대화",
+    "sessions": "대화 목록",
+    "deleteSession": "대화 삭제",
+    "deleteSessionConfirm": "이 대화를 삭제하시겠습니까?",
+    "noSessions": "대화 기록이 없습니다",
     "tool": {
       "Write": "파일 업데이트 중",
       "Edit": "파일 편집 중",

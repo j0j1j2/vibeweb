@@ -10,6 +10,7 @@ import type { WsMessage } from "@vibeweb/shared";
 import { SessionManager } from "./session.js";
 import { SessionProxy } from "./proxy.js";
 import { generateClaudeMd } from "./claude-md.js";
+import { SessionStore } from "./session-store.js";
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
@@ -23,6 +24,7 @@ if (TOKEN_KEY === "a".repeat(64) || !TOKEN_KEY) {
   app.log.warn("WARNING: Using default TOKEN_ENCRYPTION_KEY. Change this in production!");
 }
 const sessionManager = new SessionManager(tenantsDir);
+const sessionStore = new SessionStore(tenantsDir);
 const proxies = new Map<string, SessionProxy>();
 
 app.get("/health", async () => ({ status: "ok" }));
@@ -261,6 +263,41 @@ app.delete<{ Params: { tenantId: string } }>("/auth/claude/:tenantId", async (re
   return reply.status(204).send();
 });
 
+// --- Session management endpoints ---
+
+app.get<{ Params: { tenantId: string } }>("/sessions/:tenantId", async (req, reply) => {
+  const { tenantId } = req.params;
+  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
+  const sessions = sessionStore.listSessions(tenantId);
+  const activeConversationId = sessionStore.getActiveConversationId(tenantId);
+  return { sessions, activeConversationId };
+});
+
+app.post<{ Params: { tenantId: string }; Body: { conversationId: string } }>("/sessions/:tenantId/switch", async (req, reply) => {
+  const { tenantId } = req.params;
+  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
+  const { conversationId } = req.body;
+  if (!conversationId) return reply.status(400).send({ error: "conversationId required" });
+  const session = sessionStore.getSession(tenantId, conversationId);
+  if (!session) return reply.status(404).send({ error: "Session not found" });
+  sessionStore.setActiveConversationId(tenantId, conversationId);
+  return { ok: true };
+});
+
+app.post<{ Params: { tenantId: string } }>("/sessions/:tenantId/new", async (req, reply) => {
+  const { tenantId } = req.params;
+  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
+  sessionStore.setActiveConversationId(tenantId, null);
+  return { ok: true };
+});
+
+app.delete<{ Params: { tenantId: string; conversationId: string } }>("/sessions/:tenantId/:conversationId", async (req, reply) => {
+  const { tenantId, conversationId } = req.params;
+  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
+  sessionStore.deleteSession(tenantId, conversationId);
+  return { ok: true };
+});
+
 function checkCredentials(dir: string): boolean {
   return fs.existsSync(path.join(dir, "oauth-token"));
 }
@@ -291,11 +328,13 @@ const start = async () => {
         const msg: WsMessage = JSON.parse(raw.toString());
 
         if (msg.type === "session.start") {
-          if (!verifiedTenantId) {
+          // Prefer X-Tenant-Id from Traefik forwardAuth; fall back to client-supplied tenantId (console path)
+          const tenantId = verifiedTenantId || msg.tenantId;
+          if (!tenantId || !isValidTenantId(tenantId)) {
             userWs.close(4001, "Missing tenant authentication");
             return;
           }
-          currentSessionId = await handleSessionStart(userWs, verifiedTenantId, msg.locale || "ko");
+          currentSessionId = await handleSessionStart(userWs, tenantId, msg.locale || "ko");
         } else if (msg.type === "message" && msg.sessionId) {
           handleUserMessage(msg.sessionId, msg);
           currentSessionId = msg.sessionId;
@@ -367,7 +406,25 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string, locale: s
   const bridgeUrl = `ws://${session.bridgeHost}:${session.bridgePort}`;
   const bridgeWs = await connectWithRetry(bridgeUrl, 10, 500);
 
+  // Send init with active conversationId for resume
+  const activeConvId = sessionStore.getActiveConversationId(tenantId);
+  bridgeWs.send(JSON.stringify({ type: "init", conversationId: activeConvId }));
+
+  let capturedConvId: string | null = activeConvId;
+
   const proxy = new SessionProxy(sessionId, userWs, bridgeWs);
+
+  proxy.onSessionId = (convId: string) => {
+    if (capturedConvId === convId) return;
+    capturedConvId = convId;
+    const title = ((proxy as any)._firstUserMessage as string)?.slice(0, 50) || "New conversation";
+    const now = new Date().toISOString();
+    if (!sessionStore.getSession(tenantId, convId)) {
+      sessionStore.saveSession(tenantId, { conversationId: convId, title, createdAt: now, lastActivityAt: now });
+    } else {
+      sessionStore.updateLastActivity(tenantId, convId);
+    }
+  };
 
   bridgeWs.on("message", (data: Buffer) => {
     proxy.handleBridgeMessage(data.toString());
@@ -375,16 +432,24 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string, locale: s
 
   bridgeWs.on("close", () => {
     app.log.info(`Bridge WebSocket closed for session ${sessionId}`);
+    proxy.sendToUser({ type: "session.closed", reason: "bridge_disconnected" });
+    proxy.close();
+    proxies.delete(sessionId);
+    sessionManager.destroySession(sessionId);
   });
 
   proxies.set(sessionId, proxy);
-  userWs.send(JSON.stringify({ type: "session.ready", sessionId }));
+  userWs.send(JSON.stringify({ type: "session.ready", sessionId, conversationId: activeConvId }));
   return sessionId;
 }
 
 function handleUserMessage(sessionId: string, msg: WsMessage): void {
   const proxy = proxies.get(sessionId);
   if (!proxy) { app.log.warn(`No proxy for session ${sessionId}`); return; }
+  if (!(proxy as any)._firstMsgCaptured) {
+    (proxy as any)._firstUserMessage = msg.content;
+    (proxy as any)._firstMsgCaptured = true;
+  }
   app.log.info(`Forwarding message to bridge for session ${sessionId}: ${(msg.content ?? "").substring(0, 50)}`);
   proxy.sendToBridge({ type: "message", content: msg.content });
 }
