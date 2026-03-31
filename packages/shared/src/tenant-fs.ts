@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 export interface TenantPaths {
   root: string;
@@ -62,6 +63,18 @@ export function initTenantDir(paths: TenantPaths): void {
   const dbPath = path.join(paths.db, "tenant.db");
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, "");
+  }
+
+  // Initialize git repo in preview directory
+  try {
+    execFileSync("git", ["init"], { cwd: paths.preview });
+    execFileSync("git", ["config", "user.name", "vibeweb"], { cwd: paths.preview });
+    execFileSync("git", ["config", "user.email", "vibeweb@local"], { cwd: paths.preview });
+    fs.writeFileSync(path.join(paths.preview, ".gitignore"), "node_modules/\n");
+    execFileSync("git", ["add", "-A"], { cwd: paths.preview });
+    execFileSync("git", ["commit", "-m", "Initial commit"], { cwd: paths.preview });
+  } catch {
+    // git may not be available in all environments
   }
 }
 

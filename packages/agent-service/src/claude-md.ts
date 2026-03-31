@@ -50,7 +50,15 @@ Create or edit pages in \`./public/\`.
 
   const skillDatabase = isKo
     ? `### 🗄️ 스킬: 데이터베이스 관리
-SQLite + better-sqlite3 사용. DB 경로: \`/data/db/tenant.db\`
+SQLite 사용. DB 경로: \`/data/db/tenant.db\`
+
+**⚠️ node-sqlite3-wasm 사용을 강력히 권장합니다.**
+네이티브 바이너리 의존성이 없어 컨테이너 환경에서 안정적으로 동작합니다. better-sqlite3도 사용 가능하지만, 호환성 문제가 발생할 수 있습니다.
+
+\`\`\`js
+import sqlite3 from "node-sqlite3-wasm";
+const db = new sqlite3.Database("/data/db/tenant.db");
+\`\`\`
 
 **사용자가 데이터에 대해 물을 때:**
 - 적절한 타입과 제약 조건으로 테이블 생성
@@ -58,7 +66,15 @@ SQLite + better-sqlite3 사용. DB 경로: \`/data/db/tenant.db\`
 - 파라미터 바인딩 사용 (문자열 연결 금지)
 - 테이블 생성/수정 후 사용자에게 결과 설명`
     : `### 🗄️ Skill: Manage Database
-Use SQLite via better-sqlite3. DB path: \`/data/db/tenant.db\`
+Use SQLite. DB path: \`/data/db/tenant.db\`
+
+**⚠️ Strongly recommended: use node-sqlite3-wasm.**
+No native binary dependencies — works reliably in containerized environments. better-sqlite3 is also available but may have compatibility issues.
+
+\`\`\`js
+import sqlite3 from "node-sqlite3-wasm";
+const db = new sqlite3.Database("/data/db/tenant.db");
+\`\`\`
 
 **When the user asks about data:**
 - Create tables with proper types and constraints
@@ -77,7 +93,9 @@ Use SQLite via better-sqlite3. DB path: \`/data/db/tenant.db\`
 - GET, POST, PUT, DELETE 메서드 처리
 - 데이터베이스 연결 항상 닫기
 - 적절한 상태 코드와 JSON 응답 반환
-- req.method, req.query, req.body, req.headers 사용`
+- req.method, req.path, req.query, req.body, req.headers 사용
+- req.body는 raw string입니다. JSON 데이터는 \`JSON.parse(req.body)\`로 파싱하세요
+- 함수 내에서 외부 네트워크 접근(fetch 등)은 불가능합니다`
     : `### 🔌 Skill: Build API Endpoints
 Create serverless functions in \`./functions/api/\`.
 
@@ -88,7 +106,9 @@ Create serverless functions in \`./functions/api/\`.
 - Handle GET, POST, PUT, DELETE methods
 - Always close database connections
 - Return proper status codes and JSON responses
-- Use req.method, req.query, req.body, req.headers`;
+- Use req.method, req.path, req.query, req.body, req.headers
+- req.body is a raw string. Parse JSON data with \`JSON.parse(req.body)\`
+- No outbound network access (fetch, etc.) is available inside functions`;
 
   const skillPackages = isKo
     ? `### 📦 스킬: 패키지 설치

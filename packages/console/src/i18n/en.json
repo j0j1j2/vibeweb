@@ -39,6 +39,7 @@
     "files": "Files",
     "database": "Database",
     "api": "API",
+    "snapshots": "Snapshots",
     "settings": "Settings",
     "signOut": "Sign Out"
   },
@@ -186,6 +187,25 @@
     "colEndpoint": "Endpoint",
     "noApis": "No API functions yet",
     "noApisDesc": "Create functions in /functions/api/ using the chat editor"
+  },
+  "snapshots": {
+    "title": "Snapshots",
+    "create": "Take Snapshot",
+    "messagePlaceholder": "Snapshot description (optional)",
+    "restore": "Restore",
+    "restoreConfirm": "Current changes will be auto-saved, then this snapshot will be restored. Continue?",
+    "restoreSuccess": "Restored successfully",
+    "restoreFailed": "Restore failed",
+    "addTag": "Add Tag",
+    "tagPlaceholder": "Tag name",
+    "deleteTagConfirm": "Delete this tag?",
+    "noChanges": "No changes to snapshot",
+    "noSnapshots": "No snapshots yet",
+    "noSnapshotsDesc": "Modify your site with the chat, then take a snapshot",
+    "loadMore": "Load More",
+    "autoDeployLabel": "deploy",
+    "createFailed": "Failed to create snapshot",
+    "tagFailed": "Failed to add tag"
   },
   "lang": {
     "ko": "한국어",

@@ -1,7 +1,7 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "@/auth";
 import {
-  Monitor, FolderOpen, Database, Plug, Settings,
+  Monitor, FolderOpen, Database, Plug, Settings, History,
   LayoutDashboard, LogOut, ChevronDown, ChevronRight, Sparkles,
 } from "lucide-react";
 import { useState } from "react";
@@ -61,6 +61,7 @@ export function Sidebar({ tenants }: { tenants: TenantNav[] }) {
                 <NavItem to={`/t/${tn.id}/files`} icon={FolderOpen} label={t("sidebar.files")} active={isActive(`/t/${tn.id}/files`)} />
                 <NavItem to={`/t/${tn.id}/db`} icon={Database} label={t("sidebar.database")} active={isActive(`/t/${tn.id}/db`)} />
                 <NavItem to={`/t/${tn.id}/api`} icon={Plug} label={t("sidebar.api")} active={isActive(`/t/${tn.id}/api`)} />
+                <NavItem to={`/t/${tn.id}/snapshots`} icon={History} label={t("sidebar.snapshots")} active={isActive(`/t/${tn.id}/snapshots`)} />
                 <NavItem to={`/t/${tn.id}/settings`} icon={Settings} label={t("sidebar.settings")} active={isActive(`/t/${tn.id}/settings`)} />
               </div>
             )}

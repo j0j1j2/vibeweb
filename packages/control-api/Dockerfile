@@ -1,5 +1,5 @@
 FROM node:20-alpine
-RUN npm install -g pnpm
+RUN apk add --no-cache git && npm install -g pnpm
 WORKDIR /app
 
 # Copy workspace root files

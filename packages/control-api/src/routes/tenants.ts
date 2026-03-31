@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { SUBDOMAIN_REGEX, SUBDOMAIN_MAX_LENGTH, RESERVED_SUBDOMAIN_PREFIXES, RESERVED_SUBDOMAINS, getTenantPaths, initTenantDir, atomicDeploy } from "@vibeweb/shared";
 import type { Db } from "../db.js";
+import { ensureGitRepo, autoCommitIfDirty, git } from "../git.js";
 
 interface TenantRoutesOpts { db: Db; tenantsDir: string; }
 
@@ -48,6 +49,15 @@ export async function tenantRoutes(app: FastifyInstance, opts: TenantRoutesOpts)
     const tenant = db.getTenantById(req.params.id);
     if (!tenant || tenant.status !== "active") return reply.status(404).send({ error: "tenant not found" });
     const paths = getTenantPaths(tenantsDir, tenant.id);
+    // Auto-commit preview state before deploy
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const commitMsg = `deploy-${timestamp}`;
+    await ensureGitRepo(paths.preview);
+    await autoCommitIfDirty(paths.preview, commitMsg);
+    // Tag the deploy commit
+    const head = await git(paths.preview, ["rev-parse", "HEAD"]);
+    try { await git(paths.preview, ["tag", commitMsg, head]); } catch { /* tag may exist */ }
+    // Perform the actual deploy
     const backupPath = atomicDeploy(paths);
     const deployment = db.recordDeployment(tenant.id, backupPath);
     return { deployment };

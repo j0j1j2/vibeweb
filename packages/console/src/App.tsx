@@ -8,6 +8,7 @@ import { PreviewPage } from "@/pages/PreviewPage";
 import { FilesPage } from "@/pages/FilesPage";
 import { DbPage } from "@/pages/DbPage";
 import { ApiPage } from "@/pages/ApiPage";
+import { SnapshotsPage } from "@/pages/SnapshotsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { useState, useEffect } from "react";
 import { listTenants } from "@/api";
@@ -55,6 +56,7 @@ export function App() {
             <Route path="/t/:tenantId/files" element={<ChatLayout><FilesPage /></ChatLayout>} />
             <Route path="/t/:tenantId/db" element={<ChatLayout><DbPage /></ChatLayout>} />
             <Route path="/t/:tenantId/api" element={<ChatLayout><ApiPage /></ChatLayout>} />
+            <Route path="/t/:tenantId/snapshots" element={<ChatLayout><SnapshotsPage /></ChatLayout>} />
 
             {/* Pages without chat panel */}
             <Route path="/t/:tenantId/settings" element={<SettingsPage />} />

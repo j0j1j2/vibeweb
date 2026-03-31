@@ -36,3 +36,23 @@ export async function changePassword(tenantId: string, currentPassword: string, 
   });
   return res.json();
 }
+export async function getSnapshots(tenantId: string, limit = 50, offset = 0) {
+  const res = await apiFetch(`/tenants/${tenantId}/snapshots?limit=${limit}&offset=${offset}`);
+  return res.json();
+}
+export async function createSnapshot(tenantId: string, message: string) {
+  const res = await apiFetch(`/tenants/${tenantId}/snapshots`, { method: "POST", body: JSON.stringify({ message }) });
+  return res.json();
+}
+export async function restoreSnapshot(tenantId: string, hash: string) {
+  const res = await apiFetch(`/tenants/${tenantId}/snapshots/${hash}/restore`, { method: "POST" });
+  return res.json();
+}
+export async function addSnapshotTag(tenantId: string, hash: string, tag: string) {
+  const res = await apiFetch(`/tenants/${tenantId}/snapshots/${hash}/tag`, { method: "POST", body: JSON.stringify({ tag }) });
+  return res.json();
+}
+export async function deleteSnapshotTag(tenantId: string, tag: string) {
+  const res = await apiFetch(`/tenants/${tenantId}/snapshots/tags/${encodeURIComponent(tag)}`, { method: "DELETE" });
+  return res.json();
+}

@@ -69,8 +69,9 @@ Filesystem ← /data/tenants/{tenant-id}/
 2. Validates function file exists at `/data/tenants/{id}/functions/api/{path}.js`
 3. Creates isolated container:
    - Base image: `vibeweb-runner:node20` (pre-built lightweight image)
-   - Mounts `/data/tenants/{id}/functions/` → `/app` (read-only)
-   - Mounts `/data/tenants/{id}/db/` → `/data/db` (read-write, tenant's own SQLite DB)
+   - Mounts `/data/tenants/{id}/preview/functions/` → `/tenant/preview/functions` (read-only)
+   - Mounts `/data/tenants/{id}/db/` → `/tenant/db` (read-write, tenant's own SQLite DB)
+   - Entrypoint creates symlink `/data/db` → `/tenant/db` so functions can use `/data/db/tenant.db`
    - Passes request info via environment variables
 4. Container executes function, returns response via stdout
 5. 10-second timeout, then force kill

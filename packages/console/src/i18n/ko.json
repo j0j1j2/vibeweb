@@ -39,6 +39,7 @@
     "files": "파일",
     "database": "데이터베이스",
     "api": "API",
+    "snapshots": "스냅샷",
     "settings": "설정",
     "signOut": "로그아웃"
   },
@@ -186,6 +187,25 @@
     "colEndpoint": "엔드포인트",
     "noApis": "아직 API 함수가 없습니다",
     "noApisDesc": "채팅 에디터에서 /functions/api/ 에 함수를 생성하세요"
+  },
+  "snapshots": {
+    "title": "스냅샷",
+    "create": "스냅샷 찍기",
+    "messagePlaceholder": "스냅샷 설명 (선택)",
+    "restore": "복구",
+    "restoreConfirm": "현재 변경사항이 자동 저장된 후 이 스냅샷으로 복구됩니다. 계속하시겠습니까?",
+    "restoreSuccess": "복구가 완료되었습니다",
+    "restoreFailed": "복구에 실패했습니다",
+    "addTag": "태그 추가",
+    "tagPlaceholder": "태그 이름",
+    "deleteTagConfirm": "이 태그를 삭제하시겠습니까?",
+    "noChanges": "변경사항이 없습니다",
+    "noSnapshots": "아직 스냅샷이 없습니다",
+    "noSnapshotsDesc": "채팅으로 사이트를 수정한 후 스냅샷을 찍어보세요",
+    "loadMore": "더 보기",
+    "autoDeployLabel": "배포",
+    "createFailed": "스냅샷 생성에 실패했습니다",
+    "tagFailed": "태그 추가에 실패했습니다"
   },
   "lang": {
     "ko": "한국어",

@@ -10,7 +10,7 @@ export class TenantWatcher {
   watch(tenantId: string): void {
     if (this.watchers.has(tenantId)) return;
     const previewDir = path.join(this.tenantsDir, tenantId, "preview");
-    const watcher = chokidar.watch(previewDir, { ignoreInitial: true, awaitWriteFinish: { stabilityThreshold: 200 } });
+    const watcher = chokidar.watch(previewDir, { ignoreInitial: true, ignored: /(^|[/\\])\.git/, awaitWriteFinish: { stabilityThreshold: 200 } });
     watcher.on("all", (event, filePath) => {
       const relative = path.relative(previewDir, filePath);
       const ext = path.extname(filePath);
