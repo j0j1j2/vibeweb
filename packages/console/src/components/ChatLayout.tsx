@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { ChatPanel } from "@/components/ChatPanel";
-import { getTenant, switchSession, newSession, deleteSessionApi } from "@/api";
+import { getTenant, getSessions, switchSession, newSession, deleteSessionApi } from "@/api";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -59,7 +59,16 @@ export function ChatLayout({ children }: { children: ReactNode }) {
         setSessionId(msg.sessionId);
         setConnected(true);
         reconnectRef.current = 0;
-        if (msg.conversationId) setActiveConversationId(msg.conversationId);
+        if (msg.conversationId) {
+          setActiveConversationId(msg.conversationId);
+          // Load session title if not already set
+          if (!sessionTitle && tenantId) {
+            getSessions(tenantId).then((data) => {
+              const s = (data.sessions ?? []).find((s: any) => s.conversationId === msg.conversationId);
+              if (s) setSessionTitle(s.title);
+            }).catch(() => {});
+          }
+        }
       }
       else if (msg.type === "stream") {
         const d = msg.data;
@@ -132,15 +141,10 @@ export function ChatLayout({ children }: { children: ReactNode }) {
         setStatus("");
         window.dispatchEvent(new Event("vibeweb:preview-refresh"));
       } else if (msg.type === "session.closed") {
+        // Don't auto-reconnect here — ws.onclose will handle it
         setConnected(false);
         setSessionId(null);
         setLoading(false);
-        if (reconnectRef.current < 5) {
-          reconnectRef.current += 1;
-          setTimeout(() => setReconnectCount(c => c + 1), 2000);
-        } else {
-          setStatus(t("chat.status.connectionLost"));
-        }
       } else if (msg.type === "error") {
         setMessages((prev) => [...prev, {
           role: "assistant",
@@ -184,21 +188,23 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   }, [sessionId]);
 
   const reconnectWs = useCallback(() => {
+    reconnectRef.current = 0; // Reset retry count for intentional reconnects
     if (wsRef.current) {
+      // Prevent onclose from triggering another reconnect
+      wsRef.current.onclose = null;
       if (wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "session.end", sessionId }));
       }
       wsRef.current.close();
     }
-    reconnectRef.current = 0;
     setReconnectCount(c => c + 1);
   }, [sessionId]);
 
-  const handleSwitchSession = useCallback(async (conversationId: string) => {
+  const handleSwitchSession = useCallback(async (conversationId: string, title?: string) => {
     if (!tenantId) return;
     await switchSession(tenantId, conversationId);
     setMessages([]);
-    setSessionTitle("");
+    setSessionTitle(title || "");
     setActiveConversationId(conversationId);
     reconnectWs();
   }, [tenantId, reconnectWs]);

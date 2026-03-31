@@ -24,11 +24,27 @@ export async function previewStaticRoutes(app: FastifyInstance, opts: PreviewSta
     const fullPath = path.resolve(path.join(previewPublic, filePath));
 
     if (!fullPath.startsWith(path.resolve(previewPublic))) return reply.status(403).send({ error: "Forbidden" });
-    if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) return reply.status(404).send({ error: "Not found" });
 
-    const ext = path.extname(fullPath);
+    // Try exact file, then with .html extension, then index.html fallback
+    let resolvedPath = fullPath;
+    if (!fs.existsSync(resolvedPath) || fs.statSync(resolvedPath).isDirectory()) {
+      const withHtml = fullPath + ".html";
+      if (fs.existsSync(withHtml) && !fs.statSync(withHtml).isDirectory()) {
+        resolvedPath = withHtml;
+      } else {
+        // SPA-style fallback to index.html
+        const indexFallback = path.join(previewPublic, "index.html");
+        if (fs.existsSync(indexFallback)) {
+          resolvedPath = indexFallback;
+        } else {
+          return reply.status(404).send({ error: "Not found" });
+        }
+      }
+    }
+
+    const ext = path.extname(resolvedPath);
     const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
     reply.header("content-type", contentType);
-    return reply.send(fs.readFileSync(fullPath));
+    return reply.send(fs.readFileSync(resolvedPath));
   });
 }

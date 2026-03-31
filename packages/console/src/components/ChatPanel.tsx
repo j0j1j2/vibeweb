@@ -28,7 +28,7 @@ interface ChatPanelProps {
   tenantId?: string;
   sessionTitle?: string;
   activeConversationId?: string | null;
-  onSwitchSession?: (conversationId: string) => void;
+  onSwitchSession?: (conversationId: string, title?: string) => void;
   onNewSession?: () => void;
   onDeleteSession?: (conversationId: string) => void;
 }
@@ -114,7 +114,7 @@ export function ChatPanel({ messages, onSend, connected, loading, status, tenant
               <div
                 key={s.conversationId}
                 className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer group"
-                onClick={() => { onSwitchSession?.(s.conversationId); setShowSessions(false); }}
+                onClick={() => { onSwitchSession?.(s.conversationId, s.title); setShowSessions(false); }}
               >
                 <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${activeConversationId === s.conversationId ? "bg-violet-500" : "bg-gray-300"}`} />
                 <span className="text-[12px] text-gray-700 truncate flex-1">{s.title}</span>

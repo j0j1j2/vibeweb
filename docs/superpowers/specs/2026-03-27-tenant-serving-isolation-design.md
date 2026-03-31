@@ -84,26 +84,26 @@ Filesystem ← /data/tenants/{tenant-id}/
 - Network: no external outbound access
 - Filesystem: tenant functions/ read-only mount, tenant db/ read-write mount
 
-**Function signature:**
+**Function signature (CommonJS):**
 ```js
 // /api/hello.js
-export default async function(req) {
+module.exports = async function(req) {
   return {
     status: 200,
     headers: { "content-type": "application/json" },
     body: { message: "Hello!" }
   };
-}
+};
 ```
 
 **Tenant DB access from functions:**
 Each tenant gets a SQLite database at `/data/db/tenant.db` inside the function container. Functions use `node-sqlite3-wasm` (bundled in runner image) to read/write:
 ```js
 // /api/notes.js
-import sqlite3 from "node-sqlite3-wasm";
+const sqlite3 = require("node-sqlite3-wasm");
 const db = new sqlite3.Database("/data/db/tenant.db");
 
-export default async function(req) {
+module.exports = async function(req) {
   if (req.method === "POST") {
     const { title, content } = JSON.parse(req.body);
     db.run("INSERT INTO notes (title, content) VALUES (?, ?)", [title, content]);
@@ -111,7 +111,7 @@ export default async function(req) {
   }
   const notes = db.all("SELECT * FROM notes");
   return { status: 200, body: notes };
-}
+};
 ```
 
 ### 4. Preview Server

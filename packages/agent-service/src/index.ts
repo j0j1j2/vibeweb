@@ -355,7 +355,8 @@ const start = async () => {
         const proxy = proxies.get(currentSessionId);
         if (proxy) proxy.close();
         proxies.delete(currentSessionId);
-        await sessionManager.destroySession(currentSessionId);
+        // Don't destroy immediately — schedule for grace period
+        sessionManager.scheduleDestroy(currentSessionId);
       }
     });
   });
@@ -393,14 +394,16 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string, locale: s
 
   const previewDir = path.join(tenantsDir, tenantId, "preview");
   const dbDir = path.join(tenantsDir, tenantId, "db");
+  const claudeSessionsDir = path.join(tenantsDir, tenantId, "claude-sessions");
   fs.mkdirSync(previewDir, { recursive: true });
   fs.mkdirSync(dbDir, { recursive: true });
+  fs.mkdirSync(claudeSessionsDir, { recursive: true });
   const claudeMd = generateClaudeMd(tenantId, previewDir, dbDir, locale);
 
   // Write CLAUDE.md to preview dir
   fs.writeFileSync(path.join(previewDir, "CLAUDE.md"), claudeMd);
 
-  const session = await sessionManager.createSession({ tenantId, sessionId, claudeMdContent: claudeMd, authToken });
+  const session = await sessionManager.getOrCreateSession({ tenantId, sessionId, claudeMdContent: claudeMd, authToken });
 
   // Connect to bridge with retry
   const bridgeUrl = `ws://${session.bridgeHost}:${session.bridgePort}`;
@@ -435,7 +438,8 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string, locale: s
     proxy.sendToUser({ type: "session.closed", reason: "bridge_disconnected" });
     proxy.close();
     proxies.delete(sessionId);
-    sessionManager.destroySession(sessionId);
+    // Container may still be alive — bridge WS just dropped. Schedule grace period.
+    sessionManager.scheduleDestroy(sessionId);
   });
 
   proxies.set(sessionId, proxy);
@@ -457,11 +461,11 @@ function handleUserMessage(sessionId: string, msg: WsMessage): void {
 async function handleSessionEnd(sessionId: string, userWs: WebSocket): Promise<void> {
   const proxy = proxies.get(sessionId);
   if (proxy) {
-    proxy.sendToBridge({ type: "session.end" });
     proxy.close();
     proxies.delete(sessionId);
   }
-  await sessionManager.destroySession(sessionId);
+  // Don't destroy container — schedule grace period
+  sessionManager.scheduleDestroy(sessionId);
   userWs.send(JSON.stringify({ type: "session.closed", sessionId }));
 }
 

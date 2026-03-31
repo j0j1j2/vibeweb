@@ -26,6 +26,7 @@ export async function runInContainer(opts: RunFunctionOpts): Promise<FunctionRes
       `FUNCTION_PATH=${functionPath}`,
       `FUNCTIONS_DIR=/tenant/preview/functions`,
       `DB_DIR=/tenant/db`,
+      `NODE_PATH=/app/node_modules`,
       `REQ_METHOD=${request.method}`,
       `REQ_PATH=${request.path}`,
       `REQ_QUERY=${JSON.stringify(request.query)}`,

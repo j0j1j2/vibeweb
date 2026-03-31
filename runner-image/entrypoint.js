@@ -5,9 +5,10 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { createRequire } = require("node:module");
 
-// Make require() available globally so ESM function files can use it
-// Resolve from /app where better-sqlite3 and other deps are installed
-globalThis.require = createRequire(path.resolve("/app/node_modules/"));
+const functionsDir = process.env.FUNCTIONS_DIR || "/app";
+
+// Global require resolves from tenant's functions/node_modules
+globalThis.require = createRequire(path.join(functionsDir, "node_modules", "_placeholder"));
 
 async function main() {
   const fnPath = process.env.FUNCTION_PATH;
@@ -16,10 +17,9 @@ async function main() {
     return;
   }
 
-  const functionsDir = process.env.FUNCTIONS_DIR || "/app";
   const fullPath = path.join(functionsDir, fnPath);
 
-  // Create /data/db directory/symlink so functions using hardcoded DB paths work
+  // Create /data/db symlink so functions using hardcoded DB paths work
   const dbDir = process.env.DB_DIR;
   if (dbDir) {
     try {

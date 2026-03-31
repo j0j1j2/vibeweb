@@ -1,8 +1,9 @@
 import Docker from "dockerode";
 import { SESSION_IMAGE, SESSION_BRIDGE_PORT, SESSION_MEMORY_LIMIT, SESSION_CPU_LIMIT } from "@vibeweb/shared";
-import path from "node:path";
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+
+const GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 minutes before destroying idle container
 
 export interface CreateSessionOpts {
   tenantId: string;
@@ -22,19 +23,48 @@ export interface SessionInfo {
 
 export class SessionManager {
   private sessions = new Map<string, SessionInfo>();
-  private tenantSessions = new Map<string, string>();
+  private tenantSessions = new Map<string, string>(); // tenantId → sessionId
+  private destroyTimers = new Map<string, ReturnType<typeof setTimeout>>(); // sessionId → timer
 
   constructor(private tenantsDir: string) {}
 
-  async createSession(opts: CreateSessionOpts): Promise<SessionInfo> {
+  /** Get existing live session for tenant, or create a new one */
+  async getOrCreateSession(opts: CreateSessionOpts): Promise<SessionInfo> {
+    const { tenantId } = opts;
+
+    // Check for existing session
+    const existingSessionId = this.tenantSessions.get(tenantId);
+    if (existingSessionId) {
+      const existing = this.sessions.get(existingSessionId);
+      if (existing) {
+        // Cancel pending destroy timer
+        this.cancelDestroyTimer(existingSessionId);
+        // Verify container is still running
+        try {
+          const container = docker.getContainer(existing.containerId);
+          const info = await container.inspect();
+          if (info.State.Running) {
+            // Reuse existing container — update sessionId for new proxy
+            existing.sessionId = opts.sessionId;
+            this.sessions.delete(existingSessionId);
+            this.sessions.set(opts.sessionId, existing);
+            this.tenantSessions.set(tenantId, opts.sessionId);
+            return existing;
+          }
+        } catch { /* container gone, create new */ }
+        // Clean up stale entry
+        this.sessions.delete(existingSessionId);
+        this.tenantSessions.delete(tenantId);
+      }
+    }
+
+    return this.createSession(opts);
+  }
+
+  private async createSession(opts: CreateSessionOpts): Promise<SessionInfo> {
     const { tenantId, sessionId, claudeMdContent, authToken } = opts;
     if (!/^[a-f0-9-]{36}$/.test(tenantId)) {
       throw new Error("Invalid tenant ID");
-    }
-    // Clean up existing session for this tenant if any
-    const existingSessionId = this.tenantSessions.get(tenantId);
-    if (existingSessionId && this.sessions.has(existingSessionId)) {
-      await this.destroySession(existingSessionId);
     }
 
     const env = [
@@ -49,11 +79,9 @@ export class SessionManager {
       }
     }
 
-    // Use Docker named volume — bind mounts from container paths don't work in DinD
     const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
     const networkName = process.env.DOCKER_NETWORK ?? "vibeweb_default";
 
-    // Mount ONLY this tenant's subdirectories — isolate from other tenants
     const container = await docker.createContainer({
       Image: SESSION_IMAGE,
       Env: [
@@ -84,18 +112,26 @@ export class SessionManager {
             ReadOnly: true,
             VolumeOptions: { Subpath: `${tenantId}/claude-auth` } as any,
           },
+          {
+            Type: "volume" as const,
+            Source: volumeName,
+            Target: "/tenant/claude-sessions",
+            ReadOnly: false,
+            VolumeOptions: { Subpath: `${tenantId}/claude-sessions` } as any,
+          },
         ],
         Memory: parseMemoryLimit(SESSION_MEMORY_LIMIT),
         NanoCpus: SESSION_CPU_LIMIT * 1e9,
         NetworkMode: networkName,
         PidsLimit: 512,
       },
-      // Root sets up dirs/perms, then drops to 'vibe' user for claude
       Cmd: ["sh", "-c", `
-        mkdir -p /home/vibe/.claude /tenant/preview /tenant/db /data &&
+        mkdir -p /home/vibe/.claude /tenant/preview /tenant/db /tenant/claude-sessions /data &&
         cp -a /tenant/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
         test -f /tenant/claude-auth/.claude.json && cp /tenant/claude-auth/.claude.json /home/vibe/.claude.json 2>/dev/null;
-        chown -R vibe:vibe /home/vibe /tenant/preview /tenant/db 2>/dev/null;
+        rm -rf /home/vibe/.claude/sessions;
+        ln -sf /tenant/claude-sessions /home/vibe/.claude/sessions;
+        chown -R vibe:vibe /home/vibe /tenant/preview /tenant/db /tenant/claude-sessions 2>/dev/null;
         ln -sf /tenant/db /data/db;
         exec su vibe -c "HOME=/home/vibe WORKSPACE=/tenant/preview BRIDGE_PORT=${SESSION_BRIDGE_PORT} NODE_PATH=/opt/libs/node_modules CLAUDE_CODE_OAUTH_TOKEN=\${CLAUDE_CODE_OAUTH_TOKEN:-} ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY:-} node /opt/bridge/bridge.js"
       `],
@@ -108,18 +144,35 @@ export class SessionManager {
 
     await container.start();
     const info = await container.inspect();
-    // Get container IP on the shared network
     const networks = info.NetworkSettings.Networks;
     const containerIp = networks[networkName]?.IPAddress ?? Object.values(networks)[0]?.IPAddress ?? "localhost";
-    const bridgePort = SESSION_BRIDGE_PORT; // Use internal port, connect via container IP
 
-    const session: SessionInfo = { sessionId, tenantId, containerId: container.id, bridgePort, startedAt: new Date().toISOString(), bridgeHost: containerIp };
+    const session: SessionInfo = { sessionId, tenantId, containerId: container.id, bridgePort: SESSION_BRIDGE_PORT, startedAt: new Date().toISOString(), bridgeHost: containerIp };
     this.sessions.set(sessionId, session);
     this.tenantSessions.set(tenantId, sessionId);
     return session;
   }
 
+  /** Schedule container destruction after grace period */
+  scheduleDestroy(sessionId: string): void {
+    this.cancelDestroyTimer(sessionId);
+    const timer = setTimeout(() => {
+      this.destroySession(sessionId);
+    }, GRACE_PERIOD_MS);
+    this.destroyTimers.set(sessionId, timer);
+  }
+
+  /** Cancel a pending destroy */
+  private cancelDestroyTimer(sessionId: string): void {
+    const timer = this.destroyTimers.get(sessionId);
+    if (timer) {
+      clearTimeout(timer);
+      this.destroyTimers.delete(sessionId);
+    }
+  }
+
   async destroySession(sessionId: string): Promise<void> {
+    this.cancelDestroyTimer(sessionId);
     const session = this.sessions.get(sessionId);
     if (!session) return;
     try {
@@ -145,6 +198,8 @@ export class SessionManager {
     }
     this.sessions.clear();
     this.tenantSessions.clear();
+    this.destroyTimers.forEach(t => clearTimeout(t));
+    this.destroyTimers.clear();
   }
 }
 

@@ -56,10 +56,10 @@ export function initTenantDir(paths: TenantPaths): void {
   fs.mkdirSync(paths.db, { recursive: true });
   fs.mkdirSync(paths.previewPublic, { recursive: true });
   fs.mkdirSync(paths.previewFunctions, { recursive: true });
-  // Enable ESM imports in tenant functions
-  const esmPkg = JSON.stringify({ type: "module" }, null, 2) + "\n";
-  fs.writeFileSync(path.join(paths.functions, "package.json"), esmPkg);
-  fs.writeFileSync(path.join(paths.previewFunctions, "..", "package.json"), esmPkg);
+  // Tenant functions package.json — CJS mode (require works with pre-installed packages)
+  const fnPkg = JSON.stringify({ name: "tenant-functions", private: true }, null, 2) + "\n";
+  fs.writeFileSync(path.join(paths.functions, "package.json"), fnPkg);
+  fs.writeFileSync(path.join(paths.previewFunctions, "package.json"), fnPkg);
   fs.writeFileSync(path.join(paths.public, "index.html"), DEFAULT_INDEX_HTML);
   fs.writeFileSync(path.join(paths.previewPublic, "index.html"), DEFAULT_INDEX_HTML);
 
