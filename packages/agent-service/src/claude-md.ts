@@ -142,7 +142,37 @@ module.exports = async function(req) {
 - req.body는 raw string입니다. JSON 데이터는 \`JSON.parse(req.body)\`로 파싱하세요
 - 함수 내에서 외부 네트워크 접근(fetch 등)은 불가능합니다
 - \`require()\`로 패키지를 불러오세요 (import 문 대신)
-- 외부 패키지가 필요하면 \`cd ./functions && npm install 패키지명\`으로 먼저 설치하세요`
+- 외부 패키지가 필요하면 \`cd ./functions && npm install 패키지명\`으로 먼저 설치하세요
+
+**OpenAPI 스펙 유지 (필수):**
+API 함수를 생성하거나 수정할 때마다 \`./functions/openapi.json\` 파일을 업데이트하세요.
+이 파일은 콘솔의 API 페이지에서 Swagger UI로 표시됩니다.
+
+\`\`\`json
+{
+  "openapi": "3.0.0",
+  "info": { "title": "API", "version": "1.0.0" },
+  "paths": {
+    "/api/hello": {
+      "get": {
+        "summary": "인사 메시지 반환",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "example": { "message": "Hello!" } } }
+          }
+        }
+      }
+    }
+  }
+}
+\`\`\`
+
+- API 함수 생성 시 해당 경로와 메서드를 openapi.json에 추가
+- API 함수 수정 시 openapi.json의 해당 항목도 업데이트
+- API 함수 삭제 시 openapi.json에서도 제거
+- parameters, requestBody, responses를 가능한 상세하게 기술
+- example 값을 포함하면 사용자가 바로 테스트 가능`
     : `### 🔌 Skill: Build API Endpoints
 Create serverless functions in \`./functions/api/\`.
 
@@ -168,7 +198,37 @@ module.exports = async function(req) {
 - req.body is a raw string. Parse JSON data with \`JSON.parse(req.body)\`
 - No outbound network access (fetch, etc.) is available inside functions
 - Use \`require()\` to import packages (not import statements)
-- Install external packages first: \`cd ./functions && npm install package-name\``;
+- Install external packages first: \`cd ./functions && npm install package-name\`
+
+**OpenAPI Spec Maintenance (required):**
+Whenever you create or modify an API function, update \`./functions/openapi.json\`.
+This file powers the Swagger-like API explorer in the console.
+
+\`\`\`json
+{
+  "openapi": "3.0.0",
+  "info": { "title": "API", "version": "1.0.0" },
+  "paths": {
+    "/api/hello": {
+      "get": {
+        "summary": "Returns a greeting",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": { "application/json": { "example": { "message": "Hello!" } } }
+          }
+        }
+      }
+    }
+  }
+}
+\`\`\`
+
+- Add path and method to openapi.json when creating an API function
+- Update the entry when modifying a function
+- Remove the entry when deleting a function
+- Include parameters, requestBody, and responses with as much detail as possible
+- Include example values so users can test directly`;
 
   const skillPackages = isKo
     ? `### 📦 스킬: 패키지 설치

@@ -51,15 +51,15 @@ export function App() {
           <Route element={<AppLayout />}>
             <Route path="/admin" element={<AdminPage />} />
 
-            {/* Pages with chat panel */}
-            <Route path="/t/:tenantId/preview" element={<ChatLayout><PreviewPage /></ChatLayout>} />
-            <Route path="/t/:tenantId/files" element={<ChatLayout><FilesPage /></ChatLayout>} />
-            <Route path="/t/:tenantId/db" element={<ChatLayout><DbPage /></ChatLayout>} />
-            <Route path="/t/:tenantId/api" element={<ChatLayout><ApiPage /></ChatLayout>} />
-            <Route path="/t/:tenantId/snapshots" element={<ChatLayout><SnapshotsPage /></ChatLayout>} />
-
-            {/* Pages without chat panel */}
-            <Route path="/t/:tenantId/settings" element={<SettingsPage />} />
+            {/* All tenant pages share the same ChatLayout */}
+            <Route path="/t/:tenantId" element={<ChatLayout><Outlet /></ChatLayout>}>
+              <Route path="preview" element={<PreviewPage />} />
+              <Route path="files" element={<FilesPage />} />
+              <Route path="db" element={<DbPage />} />
+              <Route path="api" element={<ApiPage />} />
+              <Route path="snapshots" element={<SnapshotsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
 
             {/* Legacy redirect */}
             <Route path="/t/:tenantId/chat" element={<Navigate to="../preview" replace />} />

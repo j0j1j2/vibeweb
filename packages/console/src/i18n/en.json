@@ -182,11 +182,21 @@
     "noTables": "No tables yet. Use the chat to create your first database table."
   },
   "api": {
-    "title": "API Endpoints",
-    "colFunction": "Function",
-    "colEndpoint": "Endpoint",
+    "title": "API Explorer",
     "noApis": "No API functions yet",
-    "noApisDesc": "Create functions in /functions/api/ using the chat editor"
+    "noApisDesc": "Create API functions using the chat editor",
+    "tryIt": "Try it",
+    "send": "Send Request",
+    "sending": "Sending...",
+    "response": "Response",
+    "noSpec": "No API spec",
+    "noSpecDesc": "API specs are auto-generated when you create APIs via chat",
+    "params": "Parameters",
+    "requestBody": "Request Body",
+    "headers": "Headers",
+    "status": "Status",
+    "time": "Time",
+    "selectEndpoint": "Select an endpoint"
   },
   "snapshots": {
     "title": "Snapshots",
