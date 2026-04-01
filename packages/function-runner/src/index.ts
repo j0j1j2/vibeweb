@@ -50,6 +50,10 @@ app.addContentTypeParser("*", { parseAs: "string" }, (_req, body, done) => {
 });
 
 app.all<{ Params: { "*": string } }>("/api/*", async (req, reply) => {
+  reply.header("access-control-allow-origin", "*");
+  reply.header("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  reply.header("access-control-allow-headers", "content-type, x-tenant-id");
+  if (req.method === "OPTIONS") return reply.status(204).send();
   const tenantId = req.headers["x-tenant-id"] as string | undefined;
   if (!tenantId) return reply.status(400).send({ error: "missing x-tenant-id header" });
   const apiPath = req.params["*"];

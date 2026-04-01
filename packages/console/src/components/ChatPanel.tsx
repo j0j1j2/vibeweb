@@ -17,9 +17,10 @@ interface ChatPanelProps {
   connected: boolean;
   loading: boolean;
   status?: string;
+  subdomain?: string;
 }
 
-export function ChatPanel({ messages, onSend, connected, loading, status }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, connected, loading, status, subdomain }: ChatPanelProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -41,9 +42,10 @@ export function ChatPanel({ messages, onSend, connected, loading, status }: Chat
 
   return (
     <div className="flex flex-col h-full bg-gray-50/50 border-l border-gray-200">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" : "bg-gray-300"}`} />
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2 pr-10">
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" : "bg-gray-300"}`} />
         <span className="text-[13px] font-medium text-gray-600">{t("chat.title")}</span>
+        {subdomain && <span className="text-[11px] text-gray-300 font-mono ml-auto truncate">{subdomain}</span>}
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">

@@ -38,6 +38,20 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   const reconnectRef = useRef(0);
   const [reconnectCount, setReconnectCount] = useState(0);
 
+  // Reset state when tenant changes
+  const prevTenantRef = useRef(tenantId);
+  useEffect(() => {
+    if (prevTenantRef.current !== tenantId) {
+      prevTenantRef.current = tenantId;
+      setMessages([]);
+      setConnected(false);
+      setLoading(false);
+      setStatus("");
+      setSessionId(null);
+      reconnectRef.current = 0;
+    }
+  }, [tenantId]);
+
   useEffect(() => {
     if (!tenantId) return;
     getTenant(tenantId).then((t) => setSubdomain(t.subdomain)).catch(() => {});
@@ -154,6 +168,8 @@ export function ChatLayout({ children }: { children: ReactNode }) {
     };
 
     return () => {
+      // Prevent onclose from triggering reconnect during cleanup
+      ws.onclose = null;
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "session.end", sessionId }));
       ws.close();
     };
@@ -198,7 +214,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             >
               <PanelRightClose className="w-4 h-4" />
             </button>
-            <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} status={status} />
+            <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} status={status} subdomain={subdomain} />
           </div>
         )}
       </div>
