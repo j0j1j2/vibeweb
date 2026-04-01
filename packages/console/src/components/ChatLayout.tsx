@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { ChatPanel } from "@/components/ChatPanel";
-import { getTenant, getSessions, switchSession, newSession, deleteSessionApi } from "@/api";
+import { getTenant } from "@/api";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -37,8 +37,6 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef(0);
   const [reconnectCount, setReconnectCount] = useState(0);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [sessionTitle, setSessionTitle] = useState("");
 
   useEffect(() => {
     if (!tenantId) return;
@@ -59,21 +57,10 @@ export function ChatLayout({ children }: { children: ReactNode }) {
         setSessionId(msg.sessionId);
         setConnected(true);
         reconnectRef.current = 0;
-        if (msg.conversationId) {
-          setActiveConversationId(msg.conversationId);
-          // Load session title if not already set
-          if (!sessionTitle && tenantId) {
-            getSessions(tenantId).then((data) => {
-              const s = (data.sessions ?? []).find((s: any) => s.conversationId === msg.conversationId);
-              if (s) setSessionTitle(s.title);
-            }).catch(() => {});
-          }
-        }
       }
       else if (msg.type === "stream") {
         const d = msg.data;
 
-        // Update status indicator based on event type
         if (d?.type === "system") {
           setStatus(t("chat.status.connecting"));
         } else if (d?.type === "assistant") {
@@ -103,7 +90,6 @@ export function ChatLayout({ children }: { children: ReactNode }) {
           setStatus("");
         }
 
-        // Update messages
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (!last || last.role !== "assistant" || last.done) {
@@ -141,7 +127,6 @@ export function ChatLayout({ children }: { children: ReactNode }) {
         setStatus("");
         window.dispatchEvent(new Event("vibeweb:preview-refresh"));
       } else if (msg.type === "session.closed") {
-        // Don't auto-reconnect here — ws.onclose will handle it
         setConnected(false);
         setSessionId(null);
         setLoading(false);
@@ -176,55 +161,11 @@ export function ChatLayout({ children }: { children: ReactNode }) {
 
   const handleSend = useCallback((content: string) => {
     if (!wsRef.current || !sessionId) return;
-    setMessages((prev) => {
-      if (prev.filter(m => m.role === "user").length === 0) {
-        setSessionTitle(content.slice(0, 50));
-      }
-      return [...prev, { role: "user", content, toolUse: [], done: true }];
-    });
+    setMessages((prev) => [...prev, { role: "user", content, toolUse: [], done: true }]);
     setStatus(t("chat.status.thinking"));
     setLoading(true);
     wsRef.current.send(JSON.stringify({ type: "message", sessionId, content }));
   }, [sessionId]);
-
-  const reconnectWs = useCallback(() => {
-    reconnectRef.current = 0; // Reset retry count for intentional reconnects
-    if (wsRef.current) {
-      // Prevent onclose from triggering another reconnect
-      wsRef.current.onclose = null;
-      if (wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "session.end", sessionId }));
-      }
-      wsRef.current.close();
-    }
-    setReconnectCount(c => c + 1);
-  }, [sessionId]);
-
-  const handleSwitchSession = useCallback(async (conversationId: string, title?: string) => {
-    if (!tenantId) return;
-    await switchSession(tenantId, conversationId);
-    setMessages([]);
-    setSessionTitle(title || "");
-    setActiveConversationId(conversationId);
-    reconnectWs();
-  }, [tenantId, reconnectWs]);
-
-  const handleNewSession = useCallback(async () => {
-    if (!tenantId) return;
-    await newSession(tenantId);
-    setMessages([]);
-    setSessionTitle("");
-    setActiveConversationId(null);
-    reconnectWs();
-  }, [tenantId, reconnectWs]);
-
-  const handleDeleteSession = useCallback(async (conversationId: string) => {
-    if (!tenantId) return;
-    await deleteSessionApi(tenantId, conversationId);
-    if (activeConversationId === conversationId) {
-      await handleNewSession();
-    }
-  }, [tenantId, activeConversationId, handleNewSession]);
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -257,11 +198,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             >
               <PanelRightClose className="w-4 h-4" />
             </button>
-            <ChatPanel
-              messages={messages} onSend={handleSend} connected={connected} loading={loading} status={status}
-              tenantId={tenantId} sessionTitle={sessionTitle} activeConversationId={activeConversationId}
-              onSwitchSession={handleSwitchSession} onNewSession={handleNewSession} onDeleteSession={handleDeleteSession}
-            />
+            <ChatPanel messages={messages} onSend={handleSend} connected={connected} loading={loading} status={status} />
           </div>
         )}
       </div>

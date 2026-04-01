@@ -114,11 +114,6 @@
     "sendMessage": "Send message",
     "openChat": "Open chat",
     "collapseChat": "Collapse chat",
-    "newConversation": "New Chat",
-    "sessions": "Conversations",
-    "deleteSession": "Delete conversation",
-    "deleteSessionConfirm": "Delete this conversation?",
-    "noSessions": "No conversations yet",
     "tool": {
       "Write": "Updating file",
       "Edit": "Editing file",

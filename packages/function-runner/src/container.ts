@@ -1,8 +1,13 @@
-import Docker from "dockerode";
-import { RUNNER_IMAGE, FUNCTION_TIMEOUT_MS, FUNCTION_MEMORY_LIMIT, FUNCTION_CPU_LIMIT } from "@vibeweb/shared";
+import { RUNNER_IMAGE, FUNCTION_TIMEOUT_MS, K8S_NAMESPACE, K8S_PVC_NAME } from "@vibeweb/shared";
+import { getK8sApi, getK8sConfig } from "./k8s.js";
 import type { FunctionRequest, FunctionResponse } from "@vibeweb/shared";
+import * as k8s from "@kubernetes/client-node";
+import { Writable } from "node:stream";
+import crypto from "node:crypto";
 
-const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+const RUNNER_IMAGE_K8S = process.env.RUNNER_IMAGE ?? RUNNER_IMAGE;
+const POOL_SIZE = 2;
+const POOL_LABEL = "vibeweb.role=function-worker";
 
 export interface RunFunctionOpts {
   tenantId: string;
@@ -12,75 +17,178 @@ export interface RunFunctionOpts {
   request: FunctionRequest;
 }
 
-export async function runInContainer(opts: RunFunctionOpts): Promise<FunctionResponse> {
-  const { tenantId, functionPath, functionsDir, dbDir, request } = opts;
-  if (!/^[a-f0-9-]{36}$/.test(tenantId)) throw new Error("Invalid tenant ID");
+/** Worker pool: pre-created Pods that accept exec requests */
+class WorkerPool {
+  private ready: string[] = []; // available pod names
+  private busy = new Set<string>(); // in-use pod names
+  private initialized = false;
 
-  const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+    try {
+      await this.cleanup();
+      for (let i = 0; i < POOL_SIZE; i++) {
+        const name = await this.createWorker();
+        console.log(`Worker pool: created ${name}`);
+      }
+      console.log(`Worker pool: ${this.ready.length} workers ready`);
+    } catch (err) {
+      console.error(`Worker pool init failed: ${err instanceof Error ? err.message : err}`);
+      this.initialized = false;
+      throw err;
+    }
+  }
 
-  // Mount ONLY this tenant's subdirectories — not the entire volume
-  // "preview/functions" for code (read-only), "db" for database (read-write)
-  const container = await docker.createContainer({
-    Image: RUNNER_IMAGE,
-    Env: [
-      `FUNCTION_PATH=${functionPath}`,
-      `FUNCTIONS_DIR=/tenant/preview/functions`,
-      `DB_DIR=/tenant/db`,
-      `NODE_PATH=/app/node_modules`,
-      `REQ_METHOD=${request.method}`,
-      `REQ_PATH=${request.path}`,
-      `REQ_QUERY=${JSON.stringify(request.query)}`,
-      `REQ_HEADERS=${JSON.stringify(request.headers)}`,
-      `REQ_BODY_B64=${Buffer.from(request.body || "").toString("base64")}`,
-    ],
-    HostConfig: {
-      Mounts: [
-        {
-          Type: "volume" as const,
-          Source: volumeName,
-          Target: "/tenant/preview/functions",
-          ReadOnly: true,
-          VolumeOptions: { Subpath: `${tenantId}/preview/functions` } as any,
+  private async createWorker(): Promise<string> {
+    const api = getK8sApi();
+    const namespace = K8S_NAMESPACE;
+    const podName = `fn-worker-${crypto.randomBytes(4).toString("hex")}`;
+
+    await api.createNamespacedPod({
+      namespace,
+      body: {
+        metadata: {
+          name: podName,
+          namespace,
+          labels: { "vibeweb.role": "function-worker" },
         },
-        {
-          Type: "volume" as const,
-          Source: volumeName,
-          Target: "/tenant/db",
-          ReadOnly: false,
-          VolumeOptions: { Subpath: `${tenantId}/db` } as any,
+        spec: {
+          restartPolicy: "Never",
+          automountServiceAccountToken: false,
+          containers: [{
+            name: "runner",
+            image: RUNNER_IMAGE_K8S,
+            imagePullPolicy: "Always",
+            // Long-running: sleep forever, functions executed via exec
+            command: ["sh", "-c", "while true; do sleep 3600; done"],
+            volumeMounts: [
+              { name: "tenant-data", mountPath: "/data" },
+            ],
+            resources: {
+              requests: { memory: "64Mi", cpu: "100m" },
+            },
+          }],
+          volumes: [
+            { name: "tenant-data", persistentVolumeClaim: { claimName: K8S_PVC_NAME } },
+          ],
         },
-      ],
-      Memory: parseMemoryLimit(FUNCTION_MEMORY_LIMIT),
-      NanoCpus: FUNCTION_CPU_LIMIT * 1e9,
-      NetworkMode: "none",
-      AutoRemove: false,
-      ReadonlyRootfs: false,
-      PidsLimit: 256,
-    },
-    Labels: {
-      "vibeweb.tenant": tenantId,
-      "vibeweb.role": "function-runner",
-    },
-  });
+      },
+    });
 
-  await container.start();
+    // Wait for Running
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      const pod = await api.readNamespacedPodStatus({ name: podName, namespace });
+      if (pod?.status?.phase === "Running") break;
+      if (pod?.status?.phase === "Failed") throw new Error("Worker pod failed");
+      await new Promise(r => setTimeout(r, 200));
+    }
 
-  const result = await Promise.race([
-    waitForContainer(container),
-    timeout(FUNCTION_TIMEOUT_MS, container),
-  ]);
+    this.ready.push(podName);
+    return podName;
+  }
 
-  return result;
+  async acquire(): Promise<string> {
+    await this.init();
+    // Try to get a ready worker
+    let podName = this.ready.shift();
+    if (!podName) {
+      // All busy — create a temporary extra worker
+      podName = await this.createWorker();
+      this.ready.shift(); // remove from ready since we'll use it now
+    }
+    this.busy.add(podName);
+    return podName;
+  }
+
+  release(podName: string): void {
+    this.busy.delete(podName);
+    this.ready.push(podName);
+  }
+
+  private async cleanup(): Promise<void> {
+    const api = getK8sApi();
+    try {
+      const list = await api.listNamespacedPod({ namespace: K8S_NAMESPACE, labelSelector: POOL_LABEL });
+      for (const pod of list.items) {
+        if (pod.metadata?.name) {
+          try { await api.deleteNamespacedPod({ name: pod.metadata.name, namespace: K8S_NAMESPACE }); } catch {}
+        }
+      }
+    } catch {}
+    this.ready = [];
+    this.busy.clear();
+  }
 }
 
-async function waitForContainer(container: Docker.Container): Promise<FunctionResponse> {
+const pool = new WorkerPool();
+
+export async function runInContainer(opts: RunFunctionOpts): Promise<FunctionResponse> {
+  const { tenantId, functionPath, request } = opts;
+  if (!/^[a-f0-9-]{36}$/.test(tenantId)) throw new Error("Invalid tenant ID");
+
+  const podName = await pool.acquire();
+
   try {
-    await container.wait();
-    const logs = await container.logs({ stdout: true, stderr: true });
-    const output = logs.toString("utf-8").trim();
-    const lines = output.split("\n");
+    // Base64-encode JSON values to avoid shell quoting issues
+    const queryB64 = Buffer.from(JSON.stringify(request.query)).toString("base64");
+    const headersB64 = Buffer.from(JSON.stringify(request.headers)).toString("base64");
+    const bodyB64 = Buffer.from(request.body || "").toString("base64");
+
+    const cmd = [
+      `export FUNCTION_PATH="${functionPath}"`,
+      `export FUNCTIONS_DIR="/data/tenants/${tenantId}/preview/functions"`,
+      `export DB_DIR="/data/tenants/${tenantId}/db"`,
+      `export REQ_METHOD="${request.method}"`,
+      `export REQ_PATH="${request.path.replace(/"/g, '\\"')}"`,
+      `export REQ_QUERY="$(echo ${queryB64} | base64 -d)"`,
+      `export REQ_HEADERS="$(echo ${headersB64} | base64 -d)"`,
+      `export REQ_BODY_B64="${bodyB64}"`,
+      `rm -f /data/db`,
+      `ln -sf /data/tenants/${tenantId}/db /data/db`,
+      `node /usr/local/bin/entrypoint.js`,
+    ].join("; ");
+
+    const kc = getK8sConfig();
+    const exec = new k8s.Exec(kc);
+
+    const output = await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Function execution timed out")), FUNCTION_TIMEOUT_MS);
+      let stdoutBuf = "";
+
+      const stdoutStream = new Writable({
+        write(chunk, _enc, cb) { stdoutBuf += chunk.toString(); cb(); },
+      });
+      const stderrStream = new Writable({
+        write(_chunk, _enc, cb) { cb(); },
+      });
+
+      exec.exec(
+        K8S_NAMESPACE, podName, "runner",
+        ["sh", "-c", cmd],
+        stdoutStream,
+        stderrStream,
+        null,
+        false,
+        (status) => {
+          clearTimeout(timeout);
+          console.log(`Exec status callback, stdout length: ${stdoutBuf.length}, status: ${JSON.stringify(status)}`);
+          setTimeout(() => resolve(stdoutBuf), 200);
+        },
+      ).then((ws) => {
+        // Also resolve on WebSocket close if status callback doesn't fire
+        ws.on("close", () => {
+          clearTimeout(timeout);
+          setTimeout(() => resolve(stdoutBuf), 100);
+        });
+      }).catch(reject);
+    });
+
+    const lines = output.trim().split("\n");
     const lastLine = lines[lines.length - 1];
-    const jsonMatch = lastLine.match(/\{.*\}/);
+    const jsonMatch = lastLine?.match(/\{.*\}/);
+
     if (!jsonMatch) {
       return { status: 500, headers: {}, body: { error: "No response from function" } };
     }
@@ -89,25 +197,15 @@ async function waitForContainer(container: Docker.Container): Promise<FunctionRe
     } catch {
       return { status: 500, headers: {}, body: { error: "Invalid response from function" } };
     }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const stack = err instanceof Error ? err.stack : "";
+    console.error(`Function exec error: ${message}\n${stack}`);
+    if (message.includes("timed out")) {
+      return { status: 504, headers: {}, body: { error: "Function execution timed out" } };
+    }
+    return { status: 500, headers: {}, body: { error: message } };
   } finally {
-    try { await container.remove({ force: true }); } catch { }
+    pool.release(podName);
   }
-}
-
-async function timeout(ms: number, container: Docker.Container): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(async () => {
-      try { await container.kill(); } catch { }
-      reject(new Error("Function execution timed out"));
-    }, ms);
-  });
-}
-
-function parseMemoryLimit(limit: string): number {
-  const match = limit.match(/^(\d+)([kmg]?)$/i);
-  if (!match) return 128 * 1024 * 1024;
-  const num = parseInt(match[1], 10);
-  const unit = match[2].toLowerCase();
-  const multipliers: Record<string, number> = { "": 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3 };
-  return num * (multipliers[unit] ?? 1);
 }

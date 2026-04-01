@@ -1,6 +1,5 @@
 const { WebSocketServer } = require("ws");
 const { spawn } = require("node:child_process");
-const path = require("node:path");
 
 const PORT = process.env.BRIDGE_PORT ?? 3100;
 const WORKSPACE = process.env.WORKSPACE ?? "/workspace";
@@ -18,12 +17,7 @@ wss.on("connection", (socket) => {
 
   socket.on("message", (raw) => {
     const msg = JSON.parse(raw.toString());
-    if (msg.type === "init") {
-      if (msg.conversationId) {
-        conversationId = msg.conversationId;
-        console.log(`Resuming conversation: ${conversationId}`);
-      }
-    } else if (msg.type === "message") {
+    if (msg.type === "message") {
       runClaude(msg.content);
     } else if (msg.type === "session.end") {
       cleanup();
@@ -45,22 +39,18 @@ function runClaude(prompt) {
     "--dangerously-skip-permissions",
   ];
 
+  // Resume within same Pod lifecycle
   if (conversationId) {
     args.push("--resume", conversationId);
   }
 
   args.push(prompt);
 
-  console.log(`Spawning claude with args: ${args.join(" ")}`);
-  console.log(`HOME=${process.env.HOME}, WORKSPACE=${WORKSPACE}`);
-  console.log(`claude.json exists: ${require("fs").existsSync((process.env.HOME || "/home/vibe") + "/.claude.json")}`);
-
   claudeProcess = spawn("claude", args, {
     cwd: WORKSPACE,
     env: {
       ...process.env,
       HOME: process.env.HOME || "/home/vibe",
-      NODE_PATH: "/opt/libs/node_modules",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -68,9 +58,7 @@ function runClaude(prompt) {
   let buffer = "";
 
   claudeProcess.stdout.on("data", (chunk) => {
-    const raw = chunk.toString();
-    console.log(`Claude stdout (${raw.length} bytes): ${raw.substring(0, 200)}`);
-    buffer += raw;
+    buffer += chunk.toString();
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
 
@@ -93,13 +81,9 @@ function runClaude(prompt) {
   claudeProcess.stderr.on("data", (chunk) => {
     const text = chunk.toString();
     console.error(`Claude stderr: ${text}`);
-    if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: "stream", data: { type: "error", content: text } }));
-    }
   });
 
   claudeProcess.on("close", (code) => {
-    console.log(`Claude process exited with code ${code}`);
     if (buffer.trim()) {
       try {
         const parsed = JSON.parse(buffer);

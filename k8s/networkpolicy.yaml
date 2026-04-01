@@ -1,0 +1,11 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-function-egress
+  namespace: vibeweb
+spec:
+  podSelector:
+    matchLabels:
+      vibeweb.role: function-runner
+  policyTypes: [Egress]
+  egress: []

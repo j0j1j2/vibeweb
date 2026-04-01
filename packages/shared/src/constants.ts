@@ -24,3 +24,7 @@ export const SESSION_BRIDGE_PORT = 3100;
 export const SESSION_MEMORY_LIMIT = "512m";
 export const SESSION_CPU_LIMIT = 1;
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+// K8s configuration (read from env, set via ConfigMap)
+export const K8S_NAMESPACE = process.env.K8S_NAMESPACE ?? "vibeweb";
+export const K8S_PVC_NAME = process.env.K8S_PVC_NAME ?? "tenant-data";

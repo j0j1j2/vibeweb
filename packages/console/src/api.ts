@@ -56,19 +56,3 @@ export async function deleteSnapshotTag(tenantId: string, tag: string) {
   const res = await apiFetch(`/tenants/${tenantId}/snapshots/tags/${encodeURIComponent(tag)}`, { method: "DELETE" });
   return res.json();
 }
-export async function getSessions(tenantId: string) {
-  const res = await fetch(`/agent-api/sessions/${tenantId}`);
-  return res.json();
-}
-export async function switchSession(tenantId: string, conversationId: string) {
-  const res = await fetch(`/agent-api/sessions/${tenantId}/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId }) });
-  return res.json();
-}
-export async function newSession(tenantId: string) {
-  const res = await fetch(`/agent-api/sessions/${tenantId}/new`, { method: "POST" });
-  return res.json();
-}
-export async function deleteSessionApi(tenantId: string, conversationId: string) {
-  const res = await fetch(`/agent-api/sessions/${tenantId}/${conversationId}`, { method: "DELETE" });
-  return res.json();
-}

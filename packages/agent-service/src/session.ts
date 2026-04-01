@@ -1,9 +1,9 @@
-import Docker from "dockerode";
-import { SESSION_IMAGE, SESSION_BRIDGE_PORT, SESSION_MEMORY_LIMIT, SESSION_CPU_LIMIT } from "@vibeweb/shared";
+import { SESSION_IMAGE, SESSION_BRIDGE_PORT, SESSION_MEMORY_LIMIT, SESSION_CPU_LIMIT, K8S_NAMESPACE, K8S_PVC_NAME } from "@vibeweb/shared";
+import { getK8sApi, waitForPodRunning } from "./k8s.js";
+import crypto from "node:crypto";
 
-const docker = new Docker({ socketPath: "/var/run/docker.sock" });
-
-const GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 minutes before destroying idle container
+const GRACE_PERIOD_MS = 5 * 60 * 1000;
+const SESSION_IMAGE_K8S = process.env.SESSION_IMAGE ?? SESSION_IMAGE;
 
 export interface CreateSessionOpts {
   tenantId: string;
@@ -15,7 +15,7 @@ export interface CreateSessionOpts {
 export interface SessionInfo {
   sessionId: string;
   tenantId: string;
-  containerId: string;
+  podName: string;
   bridgePort: number;
   bridgeHost: string;
   startedAt: string;
@@ -23,36 +23,31 @@ export interface SessionInfo {
 
 export class SessionManager {
   private sessions = new Map<string, SessionInfo>();
-  private tenantSessions = new Map<string, string>(); // tenantId → sessionId
-  private destroyTimers = new Map<string, ReturnType<typeof setTimeout>>(); // sessionId → timer
+  private tenantSessions = new Map<string, string>();
+  private destroyTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(private tenantsDir: string) {}
 
-  /** Get existing live session for tenant, or create a new one */
   async getOrCreateSession(opts: CreateSessionOpts): Promise<SessionInfo> {
     const { tenantId } = opts;
+    const api = getK8sApi();
+    const namespace = K8S_NAMESPACE;
 
-    // Check for existing session
     const existingSessionId = this.tenantSessions.get(tenantId);
     if (existingSessionId) {
       const existing = this.sessions.get(existingSessionId);
       if (existing) {
-        // Cancel pending destroy timer
         this.cancelDestroyTimer(existingSessionId);
-        // Verify container is still running
         try {
-          const container = docker.getContainer(existing.containerId);
-          const info = await container.inspect();
-          if (info.State.Running) {
-            // Reuse existing container — update sessionId for new proxy
+          const pod = await api.readNamespacedPodStatus({ name: existing.podName, namespace });
+          if (pod?.status?.phase === "Running") {
             existing.sessionId = opts.sessionId;
             this.sessions.delete(existingSessionId);
             this.sessions.set(opts.sessionId, existing);
             this.tenantSessions.set(tenantId, opts.sessionId);
             return existing;
           }
-        } catch { /* container gone, create new */ }
-        // Clean up stale entry
+        } catch { /* pod gone */ }
         this.sessions.delete(existingSessionId);
         this.tenantSessions.delete(tenantId);
       }
@@ -62,124 +57,100 @@ export class SessionManager {
   }
 
   private async createSession(opts: CreateSessionOpts): Promise<SessionInfo> {
-    const { tenantId, sessionId, claudeMdContent, authToken } = opts;
-    if (!/^[a-f0-9-]{36}$/.test(tenantId)) {
-      throw new Error("Invalid tenant ID");
-    }
+    const { tenantId, sessionId, authToken } = opts;
+    if (!/^[a-f0-9-]{36}$/.test(tenantId)) throw new Error("Invalid tenant ID");
 
-    const env = [
-      `BRIDGE_PORT=${SESSION_BRIDGE_PORT}`,
-      `WORKSPACE=/workspace`,
+    const api = getK8sApi();
+    const namespace = K8S_NAMESPACE;
+    const podName = `session-${tenantId.slice(0, 8)}-${crypto.randomBytes(4).toString("hex")}`;
+
+    const env: { name: string; value: string }[] = [
+      { name: "BRIDGE_PORT", value: String(SESSION_BRIDGE_PORT) },
+      { name: "WORKSPACE", value: "/tenant/preview" },
     ];
     if (authToken) {
       if (authToken.startsWith("sk-ant-oat")) {
-        env.push(`CLAUDE_CODE_OAUTH_TOKEN=${authToken}`);
+        env.push({ name: "CLAUDE_CODE_OAUTH_TOKEN", value: authToken });
       } else {
-        env.push(`ANTHROPIC_API_KEY=${authToken}`);
+        env.push({ name: "ANTHROPIC_API_KEY", value: authToken });
       }
     }
 
-    const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
-    const networkName = process.env.DOCKER_NETWORK ?? "vibeweb_default";
-
-    const container = await docker.createContainer({
-      Image: SESSION_IMAGE,
-      Env: [
-        ...env,
-        `WORKSPACE=/tenant/preview`,
-      ],
-      ExposedPorts: { [`${SESSION_BRIDGE_PORT}/tcp`]: {} },
-      HostConfig: {
-        Mounts: [
+    const pod = {
+      metadata: {
+        name: podName,
+        namespace,
+        labels: {
+          "vibeweb.role": "agent-session",
+          "vibeweb.tenant": tenantId,
+        },
+      },
+      spec: {
+        restartPolicy: "Never" as const,
+        automountServiceAccountToken: false,
+        containers: [
           {
-            Type: "volume" as const,
-            Source: volumeName,
-            Target: "/tenant/preview",
-            ReadOnly: false,
-            VolumeOptions: { Subpath: `${tenantId}/preview` } as any,
-          },
-          {
-            Type: "volume" as const,
-            Source: volumeName,
-            Target: "/tenant/db",
-            ReadOnly: false,
-            VolumeOptions: { Subpath: `${tenantId}/db` } as any,
-          },
-          {
-            Type: "volume" as const,
-            Source: volumeName,
-            Target: "/tenant/claude-auth",
-            ReadOnly: true,
-            VolumeOptions: { Subpath: `${tenantId}/claude-auth` } as any,
-          },
-          {
-            Type: "volume" as const,
-            Source: volumeName,
-            Target: "/tenant/claude-sessions",
-            ReadOnly: false,
-            VolumeOptions: { Subpath: `${tenantId}/claude-sessions` } as any,
+            name: "session",
+            image: SESSION_IMAGE_K8S,
+            imagePullPolicy: "Always",
+            command: ["sh", "-c", [
+              "mkdir -p /home/vibe/.claude /tenant/preview /tenant/db /data",
+              "cp -a /tenant/claude-auth/. /home/vibe/.claude/ 2>/dev/null",
+              "test -f /tenant/claude-auth/.claude.json && cp /tenant/claude-auth/.claude.json /home/vibe/.claude.json 2>/dev/null",
+              "chown -R vibe:vibe /home/vibe /tenant/preview /tenant/db 2>/dev/null",
+              "ln -sf /tenant/db /data/db",
+              `exec su vibe -c "HOME=/home/vibe WORKSPACE=/tenant/preview BRIDGE_PORT=${SESSION_BRIDGE_PORT} CLAUDE_CODE_OAUTH_TOKEN=\${CLAUDE_CODE_OAUTH_TOKEN:-} ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY:-} node /opt/bridge/bridge.js"`,
+            ].join(" && ")],
+            ports: [{ containerPort: SESSION_BRIDGE_PORT }],
+            env,
+            volumeMounts: [
+              { name: "tenant-data", mountPath: "/tenant/preview", subPath: `tenants/${tenantId}/preview` },
+              { name: "tenant-data", mountPath: "/tenant/db", subPath: `tenants/${tenantId}/db` },
+              { name: "tenant-data", mountPath: "/tenant/claude-auth", subPath: `tenants/${tenantId}/claude-auth`, readOnly: true },
+            ],
+            resources: {
+              requests: {
+                memory: "128Mi",
+                cpu: "100m",
+              },
+            },
           },
         ],
-        Memory: parseMemoryLimit(SESSION_MEMORY_LIMIT),
-        NanoCpus: SESSION_CPU_LIMIT * 1e9,
-        NetworkMode: networkName,
-        PidsLimit: 512,
+        volumes: [
+          { name: "tenant-data", persistentVolumeClaim: { claimName: K8S_PVC_NAME } },
+        ],
       },
-      Cmd: ["sh", "-c", `
-        mkdir -p /home/vibe/.claude /tenant/preview /tenant/db /tenant/claude-sessions /data &&
-        cp -a /tenant/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
-        test -f /tenant/claude-auth/.claude.json && cp /tenant/claude-auth/.claude.json /home/vibe/.claude.json 2>/dev/null;
-        rm -rf /home/vibe/.claude/sessions;
-        ln -sf /tenant/claude-sessions /home/vibe/.claude/sessions;
-        chown -R vibe:vibe /home/vibe /tenant/preview /tenant/db /tenant/claude-sessions 2>/dev/null;
-        ln -sf /tenant/db /data/db;
-        exec su vibe -c "HOME=/home/vibe WORKSPACE=/tenant/preview BRIDGE_PORT=${SESSION_BRIDGE_PORT} NODE_PATH=/opt/libs/node_modules CLAUDE_CODE_OAUTH_TOKEN=\${CLAUDE_CODE_OAUTH_TOKEN:-} ANTHROPIC_API_KEY=\${ANTHROPIC_API_KEY:-} node /opt/bridge/bridge.js"
-      `],
-      Labels: {
-        "vibeweb.role": "agent-session",
-        "vibeweb.tenant": tenantId,
-        "vibeweb.session": sessionId,
-      },
-    });
+    };
 
-    await container.start();
-    const info = await container.inspect();
-    const networks = info.NetworkSettings.Networks;
-    const containerIp = networks[networkName]?.IPAddress ?? Object.values(networks)[0]?.IPAddress ?? "localhost";
+    await api.createNamespacedPod({ namespace, body: pod });
+    const podIp = await waitForPodRunning(api, namespace, podName, 60_000);
 
-    const session: SessionInfo = { sessionId, tenantId, containerId: container.id, bridgePort: SESSION_BRIDGE_PORT, startedAt: new Date().toISOString(), bridgeHost: containerIp };
+    const session: SessionInfo = {
+      sessionId, tenantId, podName,
+      bridgePort: SESSION_BRIDGE_PORT, bridgeHost: podIp,
+      startedAt: new Date().toISOString(),
+    };
     this.sessions.set(sessionId, session);
     this.tenantSessions.set(tenantId, sessionId);
     return session;
   }
 
-  /** Schedule container destruction after grace period */
   scheduleDestroy(sessionId: string): void {
     this.cancelDestroyTimer(sessionId);
-    const timer = setTimeout(() => {
-      this.destroySession(sessionId);
-    }, GRACE_PERIOD_MS);
+    const timer = setTimeout(() => { this.destroySession(sessionId); }, GRACE_PERIOD_MS);
     this.destroyTimers.set(sessionId, timer);
   }
 
-  /** Cancel a pending destroy */
   private cancelDestroyTimer(sessionId: string): void {
     const timer = this.destroyTimers.get(sessionId);
-    if (timer) {
-      clearTimeout(timer);
-      this.destroyTimers.delete(sessionId);
-    }
+    if (timer) { clearTimeout(timer); this.destroyTimers.delete(sessionId); }
   }
 
   async destroySession(sessionId: string): Promise<void> {
     this.cancelDestroyTimer(sessionId);
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    try {
-      const container = docker.getContainer(session.containerId);
-      await container.stop().catch(() => {});
-      await container.remove().catch(() => {});
-    } catch { }
+    try { await getK8sApi().deleteNamespacedPod({ name: session.podName, namespace: K8S_NAMESPACE }); } catch {}
     this.sessions.delete(sessionId);
     this.tenantSessions.delete(session.tenantId);
   }
@@ -190,24 +161,19 @@ export class SessionManager {
     return sid ? this.sessions.get(sid) : undefined;
   }
 
-  async cleanupOrphanContainers(): Promise<void> {
-    const containers = await docker.listContainers({ filters: { label: ["vibeweb.role=agent-session"] } });
-    for (const c of containers) {
-      const container = docker.getContainer(c.Id);
-      try { await container.stop(); await container.remove(); } catch { }
-    }
+  async cleanupOrphanPods(): Promise<void> {
+    const api = getK8sApi();
+    try {
+      const podList = await api.listNamespacedPod({ namespace: K8S_NAMESPACE, labelSelector: "vibeweb.role=agent-session" });
+      for (const pod of podList.items) {
+        if (pod.metadata?.name) {
+          try { await api.deleteNamespacedPod({ name: pod.metadata.name, namespace: K8S_NAMESPACE }); } catch {}
+        }
+      }
+    } catch {}
     this.sessions.clear();
     this.tenantSessions.clear();
     this.destroyTimers.forEach(t => clearTimeout(t));
     this.destroyTimers.clear();
   }
-}
-
-function parseMemoryLimit(limit: string): number {
-  const match = limit.match(/^(\d+)([kmg]?)$/i);
-  if (!match) return 512 * 1024 * 1024;
-  const num = parseInt(match[1], 10);
-  const unit = match[2].toLowerCase();
-  const multipliers: Record<string, number> = { "": 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3 };
-  return num * (multipliers[unit] ?? 1);
 }

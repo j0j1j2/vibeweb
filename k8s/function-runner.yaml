@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: function-runner
+  namespace: vibeweb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: function-runner
+  template:
+    metadata:
+      labels:
+        app: function-runner
+    spec:
+      serviceAccountName: vibeweb-pod-manager
+      containers:
+        - name: function-runner
+          image: k3d-vibeweb-registry:5050/vibeweb-function-runner:latest
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: vibeweb-config
+          volumeMounts:
+            - name: tenant-data
+              mountPath: /data
+      volumes:
+        - name: tenant-data
+          persistentVolumeClaim:
+            claimName: tenant-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: function-runner
+  namespace: vibeweb
+spec:
+  selector:
+    app: function-runner
+  ports:
+    - port: 3001
+      targetPort: 3001

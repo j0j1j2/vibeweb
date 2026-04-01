@@ -84,13 +84,13 @@ Vary between light and dark themes, different fonts, different aesthetics across
     ? `### 🗄️ 스킬: 데이터베이스 관리
 SQLite 사용. DB 경로: \`/data/db/tenant.db\`
 
-**node-sqlite3-wasm을 사용하세요.**
-네이티브 바이너리 의존성이 없어 컨테이너 환경에서 안정적으로 동작합니다.
-먼저 설치하세요: \`cd ./functions && npm install node-sqlite3-wasm\`
+**better-sqlite3를 사용하세요.**
+먼저 설치: \`cd ./functions && npm install better-sqlite3\`
 
 \`\`\`js
-const sqlite3 = require("node-sqlite3-wasm");
-const db = new sqlite3.Database("/data/db/tenant.db");
+const Database = require("better-sqlite3");
+const db = new Database("/data/db/tenant.db");
+db.pragma("journal_mode = WAL");
 \`\`\`
 
 **사용자가 데이터에 대해 물을 때:**
@@ -101,13 +101,13 @@ const db = new sqlite3.Database("/data/db/tenant.db");
     : `### 🗄️ Skill: Manage Database
 Use SQLite. DB path: \`/data/db/tenant.db\`
 
-**Use node-sqlite3-wasm.**
-No native binary dependencies — works reliably in containerized environments.
-Install first: \`cd ./functions && npm install node-sqlite3-wasm\`
+**Use better-sqlite3.**
+Install first: \`cd ./functions && npm install better-sqlite3\`
 
 \`\`\`js
-const sqlite3 = require("node-sqlite3-wasm");
-const db = new sqlite3.Database("/data/db/tenant.db");
+const Database = require("better-sqlite3");
+const db = new Database("/data/db/tenant.db");
+db.pragma("journal_mode = WAL");
 \`\`\`
 
 **When the user asks about data:**

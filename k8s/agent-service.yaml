@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-service
+  namespace: vibeweb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-service
+  template:
+    metadata:
+      labels:
+        app: agent-service
+    spec:
+      serviceAccountName: vibeweb-pod-manager
+      containers:
+        - name: agent-service
+          image: k3d-vibeweb-registry:5050/vibeweb-agent-service:latest
+          ports:
+            - containerPort: 3003
+          envFrom:
+            - configMapRef:
+                name: vibeweb-config
+            - secretRef:
+                name: vibeweb-secrets
+          volumeMounts:
+            - name: tenant-data
+              mountPath: /data
+      volumes:
+        - name: tenant-data
+          persistentVolumeClaim:
+            claimName: tenant-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-service
+  namespace: vibeweb
+spec:
+  selector:
+    app: agent-service
+  ports:
+    - port: 3003
+      targetPort: 3003

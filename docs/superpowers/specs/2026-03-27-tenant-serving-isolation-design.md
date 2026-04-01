@@ -97,19 +97,19 @@ module.exports = async function(req) {
 ```
 
 **Tenant DB access from functions:**
-Each tenant gets a SQLite database at `/data/db/tenant.db` inside the function container. Functions use `node-sqlite3-wasm` (bundled in runner image) to read/write:
+Each tenant gets a SQLite database at `/data/db/tenant.db` inside the function container. Functions use `better-sqlite3` (installed by tenant via npm) to read/write:
 ```js
 // /api/notes.js
-const sqlite3 = require("node-sqlite3-wasm");
-const db = new sqlite3.Database("/data/db/tenant.db");
+const Database = require("better-sqlite3");
+const db = new Database("/data/db/tenant.db");
 
 module.exports = async function(req) {
   if (req.method === "POST") {
     const { title, content } = JSON.parse(req.body);
-    db.run("INSERT INTO notes (title, content) VALUES (?, ?)", [title, content]);
+    db.prepare("INSERT INTO notes (title, content) VALUES (?, ?)").run(title, content);
     return { status: 201, body: { ok: true } };
   }
-  const notes = db.all("SELECT * FROM notes");
+  const notes = db.prepare("SELECT * FROM notes").all();
   return { status: 200, body: notes };
 };
 ```

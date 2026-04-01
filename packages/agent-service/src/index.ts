@@ -4,15 +4,12 @@ import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
 import { v4 as uuidv4 } from "uuid";
-import Docker from "dockerode";
-import { AGENT_SERVICE_PORT, SESSION_TIMEOUT_MS, SESSION_IMAGE } from "@vibeweb/shared";
+import { AGENT_SERVICE_PORT, SESSION_TIMEOUT_MS, SESSION_IMAGE, K8S_NAMESPACE, K8S_PVC_NAME } from "@vibeweb/shared";
+import { getK8sApi } from "./k8s.js";
 import type { WsMessage } from "@vibeweb/shared";
 import { SessionManager } from "./session.js";
 import { SessionProxy } from "./proxy.js";
 import { generateClaudeMd } from "./claude-md.js";
-import { SessionStore } from "./session-store.js";
-
-const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const tenantsDir = path.join(DATA_DIR, "tenants");
@@ -24,7 +21,6 @@ if (TOKEN_KEY === "a".repeat(64) || !TOKEN_KEY) {
   app.log.warn("WARNING: Using default TOKEN_ENCRYPTION_KEY. Change this in production!");
 }
 const sessionManager = new SessionManager(tenantsDir);
-const sessionStore = new SessionStore(tenantsDir);
 const proxies = new Map<string, SessionProxy>();
 
 app.get("/health", async () => ({ status: "ok" }));
@@ -32,171 +28,200 @@ app.get("/health", async () => ({ status: "ok" }));
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 function isValidTenantId(id: string): boolean { return UUID_RE.test(id); }
 
-// Track active login containers per tenant (container + stdin stream)
-const loginContainers = new Map<string, { container: Docker.Container; stream: NodeJS.ReadWriteStream }>();
+// Track active login pods per tenant
+const loginPods = new Map<string, { podName: string }>();
 
-// POST /auth/claude/:tenantId/login - Start claude login flow for a tenant
+// POST /auth/claude/:tenantId/login - Start claude login flow via K8s Pod (TTY mode)
 app.post<{ Params: { tenantId: string } }>("/auth/claude/:tenantId/login", async (req, reply) => {
   const { tenantId } = req.params;
   if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
-  // Ensure tenant claude-auth dir exists (inside the volume)
   const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
   fs.mkdirSync(claudeAuthDir, { recursive: true });
 
-  const prev = loginContainers.get(tenantId);
+  // Clean up previous login pod
+  const prev = loginPods.get(tenantId);
   if (prev) {
-    try { await prev.container.stop(); await prev.container.remove(); } catch {}
-    loginContainers.delete(tenantId);
+    try { await getK8sApi().deleteNamespacedPod({ name: prev.podName, namespace: K8S_NAMESPACE }); } catch {}
+    loginPods.delete(tenantId);
   }
 
-  const volumeName = process.env.TENANT_VOLUME_NAME ?? "vibeweb_tenant-data";
+  const podName = `login-${tenantId.slice(0, 8)}-${Date.now().toString(36)}`;
+  const api = getK8sApi();
 
   try {
-    // Use setup-token: it shows OAuth URL + "Paste code here" prompt on stdin
-    const container = await docker.createContainer({
-      Image: SESSION_IMAGE,
-      Cmd: ["sh", "-c", `
-        mkdir -p /tenant/claude-auth /home/vibe/.claude &&
-        cp -a /tenant/claude-auth/. /home/vibe/.claude/ 2>/dev/null;
-        chown -R vibe:vibe /home/vibe /tenant/claude-auth 2>/dev/null;
-        exec su vibe -c "HOME=/home/vibe claude setup-token"
-      `],
-      Env: [`HOME=/root`],
-      HostConfig: {
-        Mounts: [
-          {
-            Type: "volume" as const,
-            Source: volumeName,
-            Target: "/tenant/claude-auth",
-            ReadOnly: false,
-            VolumeOptions: { Subpath: `${tenantId}/claude-auth` } as any,
-          },
-        ],
-        Memory: 256 * 1024 * 1024,
-        NanoCpus: 0.5 * 1e9,
-        PidsLimit: 64,
+    await api.createNamespacedPod({
+      namespace: K8S_NAMESPACE,
+      body: {
+        metadata: {
+          name: podName,
+          namespace: K8S_NAMESPACE,
+          labels: { "vibeweb.role": "auth-login", "vibeweb.tenant": tenantId },
+        },
+        spec: {
+          restartPolicy: "Never",
+          automountServiceAccountToken: false,
+          containers: [{
+            name: "login",
+            image: process.env.SESSION_IMAGE ?? SESSION_IMAGE,
+            imagePullPolicy: "Always",
+            command: ["sh", "-c", [
+              "mkdir -p /tenant/claude-auth /home/vibe/.claude",
+              "cp -a /tenant/claude-auth/. /home/vibe/.claude/ 2>/dev/null",
+              "chown -R vibe:vibe /home/vibe /tenant/claude-auth 2>/dev/null",
+              'su vibe -c "HOME=/home/vibe claude setup-token"',
+            ].join(" && ")],
+            stdin: true,
+            tty: true,
+            volumeMounts: [
+              { name: "tenant-data", mountPath: "/tenant/claude-auth", subPath: `tenants/${tenantId}/claude-auth` },
+            ],
+            resources: { requests: { memory: "64Mi", cpu: "100m" } },
+          }],
+          volumes: [
+            { name: "tenant-data", persistentVolumeClaim: { claimName: K8S_PVC_NAME } },
+          ],
+        },
       },
-      Labels: { "vibeweb.role": "auth-login", "vibeweb.tenant": tenantId },
-      Tty: true,
-      OpenStdin: true,
-      AttachStdin: true,
-      AttachStdout: true,
     });
 
-    // Attach BEFORE start to capture stdin stream
-    const stream = await container.attach({ stream: true, stdin: true, stdout: true, hijack: true });
-    await container.start();
+    // Wait for pod running
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      const pod = await api.readNamespacedPodStatus({ name: podName, namespace: K8S_NAMESPACE });
+      if (pod?.status?.phase === "Running") break;
+      if (pod?.status?.phase === "Failed") throw new Error("Login pod failed");
+      await new Promise(r => setTimeout(r, 200));
+    }
 
-    // Capture output to find the OAuth URL
-    // setup-token wraps the URL across multiple lines in TTY mode,
-    // so we strip all whitespace/ANSI and look for the full URL
+    // Poll logs to capture OAuth URL (TTY mode includes ANSI codes)
     const url = await new Promise<string>((resolve, reject) => {
-      let output = "";
-      const timeout = setTimeout(() => reject(new Error("Timeout. Output: " + output.substring(0, 1000))), 30000);
-      stream.on("data", (chunk: Buffer) => {
-        output += chunk.toString();
-        // Strip ANSI codes, control chars, and ALL whitespace to rejoin wrapped URL
-        const clean = output
-          .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
-          .replace(/[\r\n\t]/g, "")
-          .replace(/[^\x20-\x7E]/g, "");
-        // Match the full URL (now on one line after stripping)
-        const m = clean.match(/(https:\/\/claude\.com\/cai\/oauth\/authorize\?[^]*?state=[A-Za-z0-9_-]+)/);
-        if (m) {
-          clearTimeout(timeout);
-          resolve(m[1].replace(/Paste.*$/, ""));
-        }
-      });
+      const timeout = setTimeout(() => reject(new Error("Timeout waiting for OAuth URL")), 60_000);
+      const poll = async () => {
+        try {
+          const logOutput = await api.readNamespacedPodLog({ name: podName, namespace: K8S_NAMESPACE });
+          const output = typeof logOutput === "string" ? logOutput : "";
+          const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/\x1b\[[0-9;]*[a-z]/g, "").replace(/[\r\n\t]/g, "").replace(/[^\x20-\x7E]/g, "");
+          const m = clean.match(/(https:\/\/claude\.com\/cai\/oauth\/authorize\?[^]*?state=[A-Za-z0-9_-]+)/);
+          if (m) { clearTimeout(timeout); resolve(m[1].replace(/Paste.*$/, "")); return; }
+        } catch {}
+        if (Date.now() < deadline) setTimeout(poll, 1000);
+      };
+      poll();
     });
 
-    // Store container + stream for code submission
-    loginContainers.set(tenantId, { container, stream });
-
-    // Monitor stream for token output (setup-token prints sk-ant-oat... after code exchange)
-    stream.on("data", (chunk: Buffer) => {
-      const text = chunk.toString().replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n]/g, "");
-      // Split by whitespace/newlines, find the token fragment
-      const words = text.split(/[\s\n\r]+/);
-      const tokenWord = words.find(w => w.startsWith("sk-ant-oat"));
-      if (tokenWord) {
-        // setup-token may output "sk-ant-oat...AAStored credentials..." with no separator
-        // Strip known CLI output suffixes that get concatenated to the token
-        const token = tokenWord
-          .replace(/[^A-Za-z0-9_-]/g, "")
-          .replace(/(Stored?|credentials|Success|Done|saved).*$/i, "");
-        const authDir = path.join(tenantsDir, tenantId, "claude-auth");
-        fs.mkdirSync(authDir, { recursive: true });
-        fs.writeFileSync(path.join(authDir, "oauth-token"), token);
-        fs.writeFileSync(path.join(authDir, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
-        app.log.info(`Token captured and saved for tenant ${tenantId}`);
-      }
-    });
+    loginPods.set(tenantId, { podName });
 
     // Auto-cleanup after 5 minutes
     setTimeout(async () => {
-      if (loginContainers.has(tenantId)) {
-        const entry = loginContainers.get(tenantId)!;
-        try { await entry.container.stop(); await entry.container.remove(); } catch {}
-        loginContainers.delete(tenantId);
+      const entry = loginPods.get(tenantId);
+      if (entry) {
+        try { await api.deleteNamespacedPod({ name: entry.podName, namespace: K8S_NAMESPACE }); } catch {}
+        loginPods.delete(tenantId);
       }
     }, 300_000);
 
-    // Auto-cleanup when container exits
-    container.wait().then(() => {
-      container.remove().catch(() => {});
-      app.log.info(`Login container for ${tenantId} exited`);
-    });
+    // Monitor token output from logs in background
+    (async () => {
+      const tokenDeadline = Date.now() + 300_000;
+      while (Date.now() < tokenDeadline && loginPods.has(tenantId)) {
+        try {
+          const logOutput = await api.readNamespacedPodLog({ name: podName, namespace: K8S_NAMESPACE });
+          const text = (typeof logOutput === "string" ? logOutput : "").replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").replace(/[^\x20-\x7E\n]/g, "");
+          const words = text.split(/[\s\n\r]+/);
+          const tokenWord = words.find(w => w.startsWith("sk-ant-oat"));
+          if (tokenWord) {
+            const token = tokenWord.replace(/[^A-Za-z0-9_-]/g, "").replace(/(Stored?|credentials|Success|Done|saved).*$/i, "");
+            fs.mkdirSync(claudeAuthDir, { recursive: true });
+            fs.writeFileSync(path.join(claudeAuthDir, "oauth-token"), token);
+            fs.writeFileSync(path.join(claudeAuthDir, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
+            app.log.info(`Token captured from logs for tenant ${tenantId}`);
+            break;
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    })();
 
     return { url };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to start login";
+    try { await api.deleteNamespacedPod({ name: podName, namespace: K8S_NAMESPACE }); } catch {}
     return reply.status(500).send({ error: message });
   }
 });
 
-// POST /auth/claude/:tenantId/code - Send auth code to the running setup-token container
+// POST /auth/claude/:tenantId/code - Send auth code via K8s Attach or save token directly
 app.post<{ Params: { tenantId: string }; Body: { code: string } }>("/auth/claude/:tenantId/code", async (req, reply) => {
   const { tenantId } = req.params;
   if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
   const { code } = req.body;
   if (!code) return reply.status(400).send({ error: "code is required" });
 
-  const entry = loginContainers.get(tenantId);
-  if (!entry) {
-    return reply.status(404).send({ error: "No active login session. Click Connect first." });
-  }
+  const authDir = path.join(tenantsDir, tenantId, "claude-auth");
+  fs.mkdirSync(authDir, { recursive: true });
+  const entry = loginPods.get(tenantId);
 
   try {
-    // Send code to the SAME container that generated the OAuth URL (same PKCE session)
-    // TTY mode needs \r as Enter
-    app.log.info(`Sending auth code to setup-token for tenant ${tenantId}: ${code.substring(0, 20)}...`);
-    entry.stream.write(code + "\r");
+    // If code looks like a token, save it directly
+    if (code.startsWith("sk-ant-")) {
+      fs.writeFileSync(path.join(authDir, "oauth-token"), code.trim());
+      fs.writeFileSync(path.join(authDir, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
+      if (entry) {
+        try { await getK8sApi().deleteNamespacedPod({ name: entry.podName, namespace: K8S_NAMESPACE }); } catch {}
+        loginPods.delete(tenantId);
+      }
+      return { success: true };
+    }
 
-    // Wait for container to exit (setup-token completes after code exchange)
-    await Promise.race([
-      entry.container.wait(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout waiting for token exchange")), 60000)),
-    ]);
+    // OAuth code — send to login Pod via K8s Attach API (stdin)
+    if (!entry) return reply.status(404).send({ error: "No active login session. Click Connect first." });
 
-    loginContainers.delete(tenantId);
+    app.log.info(`Sending auth code via K8s Attach for tenant ${tenantId}: ${code.substring(0, 20)}...`);
 
-    // Check if credentials were saved
-    const claudeAuthDir = path.join(tenantsDir, tenantId, "claude-auth");
+    const { getK8sConfig } = await import("./k8s.js");
+    const k8s = await import("@kubernetes/client-node");
+    const { Readable, Writable } = await import("node:stream");
+    const kc = getK8sConfig();
+    const attach = new k8s.Attach(kc);
 
-    // Create .claude.json if not exists
-    const claudeJsonPath = path.join(claudeAuthDir, ".claude.json");
+    // Create a readable stream that sends the code then ends
+    const stdinStream = new Readable({
+      read() {
+        this.push(code.trim() + "\r");
+        this.push(null);
+      },
+    });
+    const nullStream = new Writable({ write(_chunk, _enc, cb) { cb(); } });
+
+    await attach.attach(K8S_NAMESPACE, entry.podName, "login", nullStream, nullStream, stdinStream, true);
+
+    // Poll for credentials to appear
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 1000));
+      if (checkCredentials(authDir)) {
+        app.log.info(`Credentials saved for tenant ${tenantId}`);
+        break;
+      }
+      try {
+        const pod = await getK8sApi().readNamespacedPodStatus({ name: entry.podName, namespace: K8S_NAMESPACE });
+        if (pod?.status?.phase !== "Running") break;
+      } catch { break; }
+    }
+
+    loginPods.delete(tenantId);
+
+    const claudeJsonPath = path.join(authDir, ".claude.json");
     if (!fs.existsSync(claudeJsonPath)) {
-      fs.mkdirSync(claudeAuthDir, { recursive: true });
       fs.writeFileSync(claudeJsonPath, JSON.stringify({ hasCompletedOnboarding: true, theme: "light" }));
     }
 
-    const hasCredentials = checkCredentials(claudeAuthDir);
+    const hasCredentials = checkCredentials(authDir);
     app.log.info(`Auth code exchange for ${tenantId}: credentials=${hasCredentials}`);
-
     return { success: hasCredentials };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to exchange code";
-    loginContainers.delete(tenantId);
+    loginPods.delete(tenantId);
     app.log.error(`Code exchange error: ${message}`);
     return reply.status(500).send({ error: message });
   }
@@ -263,41 +288,6 @@ app.delete<{ Params: { tenantId: string } }>("/auth/claude/:tenantId", async (re
   return reply.status(204).send();
 });
 
-// --- Session management endpoints ---
-
-app.get<{ Params: { tenantId: string } }>("/sessions/:tenantId", async (req, reply) => {
-  const { tenantId } = req.params;
-  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
-  const sessions = sessionStore.listSessions(tenantId);
-  const activeConversationId = sessionStore.getActiveConversationId(tenantId);
-  return { sessions, activeConversationId };
-});
-
-app.post<{ Params: { tenantId: string }; Body: { conversationId: string } }>("/sessions/:tenantId/switch", async (req, reply) => {
-  const { tenantId } = req.params;
-  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
-  const { conversationId } = req.body;
-  if (!conversationId) return reply.status(400).send({ error: "conversationId required" });
-  const session = sessionStore.getSession(tenantId, conversationId);
-  if (!session) return reply.status(404).send({ error: "Session not found" });
-  sessionStore.setActiveConversationId(tenantId, conversationId);
-  return { ok: true };
-});
-
-app.post<{ Params: { tenantId: string } }>("/sessions/:tenantId/new", async (req, reply) => {
-  const { tenantId } = req.params;
-  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
-  sessionStore.setActiveConversationId(tenantId, null);
-  return { ok: true };
-});
-
-app.delete<{ Params: { tenantId: string; conversationId: string } }>("/sessions/:tenantId/:conversationId", async (req, reply) => {
-  const { tenantId, conversationId } = req.params;
-  if (!isValidTenantId(tenantId)) return reply.status(400).send({ error: "Invalid tenant ID" });
-  sessionStore.deleteSession(tenantId, conversationId);
-  return { ok: true };
-});
-
 function checkCredentials(dir: string): boolean {
   return fs.existsSync(path.join(dir, "oauth-token"));
 }
@@ -311,7 +301,7 @@ function readOAuthToken(tenantId: string): string | null {
 }
 
 const start = async () => {
-  await sessionManager.cleanupOrphanContainers();
+  await sessionManager.cleanupOrphanPods();
   await app.listen({ port: AGENT_SERVICE_PORT, host: "0.0.0.0" });
 
   const server = app.server as http.Server;
@@ -394,10 +384,8 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string, locale: s
 
   const previewDir = path.join(tenantsDir, tenantId, "preview");
   const dbDir = path.join(tenantsDir, tenantId, "db");
-  const claudeSessionsDir = path.join(tenantsDir, tenantId, "claude-sessions");
   fs.mkdirSync(previewDir, { recursive: true });
   fs.mkdirSync(dbDir, { recursive: true });
-  fs.mkdirSync(claudeSessionsDir, { recursive: true });
   const claudeMd = generateClaudeMd(tenantId, previewDir, dbDir, locale);
 
   // Write CLAUDE.md to preview dir
@@ -409,25 +397,7 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string, locale: s
   const bridgeUrl = `ws://${session.bridgeHost}:${session.bridgePort}`;
   const bridgeWs = await connectWithRetry(bridgeUrl, 10, 500);
 
-  // Send init with active conversationId for resume
-  const activeConvId = sessionStore.getActiveConversationId(tenantId);
-  bridgeWs.send(JSON.stringify({ type: "init", conversationId: activeConvId }));
-
-  let capturedConvId: string | null = activeConvId;
-
   const proxy = new SessionProxy(sessionId, userWs, bridgeWs);
-
-  proxy.onSessionId = (convId: string) => {
-    if (capturedConvId === convId) return;
-    capturedConvId = convId;
-    const title = ((proxy as any)._firstUserMessage as string)?.slice(0, 50) || "New conversation";
-    const now = new Date().toISOString();
-    if (!sessionStore.getSession(tenantId, convId)) {
-      sessionStore.saveSession(tenantId, { conversationId: convId, title, createdAt: now, lastActivityAt: now });
-    } else {
-      sessionStore.updateLastActivity(tenantId, convId);
-    }
-  };
 
   bridgeWs.on("message", (data: Buffer) => {
     proxy.handleBridgeMessage(data.toString());
@@ -438,22 +408,17 @@ async function handleSessionStart(userWs: WebSocket, tenantId: string, locale: s
     proxy.sendToUser({ type: "session.closed", reason: "bridge_disconnected" });
     proxy.close();
     proxies.delete(sessionId);
-    // Container may still be alive — bridge WS just dropped. Schedule grace period.
     sessionManager.scheduleDestroy(sessionId);
   });
 
   proxies.set(sessionId, proxy);
-  userWs.send(JSON.stringify({ type: "session.ready", sessionId, conversationId: activeConvId }));
+  userWs.send(JSON.stringify({ type: "session.ready", sessionId }));
   return sessionId;
 }
 
 function handleUserMessage(sessionId: string, msg: WsMessage): void {
   const proxy = proxies.get(sessionId);
   if (!proxy) { app.log.warn(`No proxy for session ${sessionId}`); return; }
-  if (!(proxy as any)._firstMsgCaptured) {
-    (proxy as any)._firstUserMessage = msg.content;
-    (proxy as any)._firstMsgCaptured = true;
-  }
   app.log.info(`Forwarding message to bridge for session ${sessionId}: ${(msg.content ?? "").substring(0, 50)}`);
   proxy.sendToBridge({ type: "message", content: msg.content });
 }

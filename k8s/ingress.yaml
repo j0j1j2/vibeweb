@@ -1,0 +1,84 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: tenant-auth
+  namespace: vibeweb
+spec:
+  forwardAuth:
+    address: "http://control-api.vibeweb.svc.cluster.local:1919/auth/validate"
+    authResponseHeaders:
+      - "X-Tenant-Id"
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: vibeweb-routes
+  namespace: vibeweb
+spec:
+  entryPoints: [web]
+  routes:
+    # Console
+    - match: "Host(`console.vibeweb.localhost`)"
+      kind: Rule
+      services:
+        - name: console
+          port: 80
+      priority: 200
+
+    # Control API (bare domain)
+    - match: "Host(`vibeweb.localhost`)"
+      kind: Rule
+      services:
+        - name: control-api
+          port: 1919
+      priority: 200
+
+    # Function Runner — /api/*
+    - match: "HostRegexp(`^(preview-)?[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/api/`)"
+      kind: Rule
+      services:
+        - name: function-runner
+          port: 3001
+      middlewares:
+        - name: tenant-auth
+      priority: 150
+
+    # Preview WebSocket — /ws
+    - match: "HostRegexp(`^(preview-)?[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/ws`)"
+      kind: Rule
+      services:
+        - name: preview-server
+          port: 3002
+      middlewares:
+        - name: tenant-auth
+      priority: 140
+
+    # Preview Static — preview-*
+    - match: "HostRegexp(`^preview-[a-z0-9-]+\\.vibeweb\\.localhost$`)"
+      kind: Rule
+      services:
+        - name: preview-server
+          port: 3002
+      middlewares:
+        - name: tenant-auth
+      priority: 100
+
+    # Agent WebSocket — /agent
+    - match: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`) && PathPrefix(`/agent`)"
+      kind: Rule
+      services:
+        - name: agent-service
+          port: 3003
+      middlewares:
+        - name: tenant-auth
+      priority: 90
+
+    # Site Server (fallback)
+    - match: "HostRegexp(`^[a-z0-9-]+\\.vibeweb\\.localhost$`)"
+      kind: Rule
+      services:
+        - name: nginx
+          port: 80
+      middlewares:
+        - name: tenant-auth
+      priority: 1

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-api
+  namespace: vibeweb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: control-api
+  template:
+    metadata:
+      labels:
+        app: control-api
+    spec:
+      containers:
+        - name: control-api
+          image: k3d-vibeweb-registry:5050/vibeweb-control-api:latest
+          ports:
+            - containerPort: 1919
+          envFrom:
+            - configMapRef:
+                name: vibeweb-config
+            - secretRef:
+                name: vibeweb-secrets
+          volumeMounts:
+            - name: tenant-data
+              mountPath: /data
+      volumes:
+        - name: tenant-data
+          persistentVolumeClaim:
+            claimName: tenant-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-api
+  namespace: vibeweb
+spec:
+  selector:
+    app: control-api
+  ports:
+    - port: 1919
+      targetPort: 1919

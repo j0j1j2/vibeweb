@@ -11,6 +11,8 @@ export async function git(cwd: string, args: string[]): Promise<string> {
 }
 
 export async function ensureGitRepo(previewDir: string): Promise<void> {
+  // Mark directory as safe (ownership may differ in containers)
+  try { await git("/", ["config", "--global", "--add", "safe.directory", previewDir]); } catch {}
   const gitDir = path.join(previewDir, ".git");
   if (fs.existsSync(gitDir)) return;
   await git(previewDir, ["init"]);

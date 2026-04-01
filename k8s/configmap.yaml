@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vibeweb-config
+  namespace: vibeweb
+data:
+  DATA_DIR: "/data"
+  BASE_DOMAIN: "vibeweb.localhost"
+  K8S_NAMESPACE: "vibeweb"
+  K8S_PVC_NAME: "tenant-data"
+  RUNNER_IMAGE: "k3d-vibeweb-registry:5050/vibeweb-runner:node20"
+  SESSION_IMAGE: "k3d-vibeweb-registry:5050/vibeweb-session:latest"

@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
@@ -6,7 +6,7 @@ WORKDIR /app
 RUN mkdir -p /data && chmod 777 /data
 
 # Non-root user for security
-RUN adduser -D -u 1001 runner
+RUN useradd -u 1001 runner
 USER runner
 
 COPY --chown=runner:runner entrypoint.js /usr/local/bin/entrypoint.js

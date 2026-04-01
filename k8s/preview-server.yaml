@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preview-server
+  namespace: vibeweb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: preview-server
+  template:
+    metadata:
+      labels:
+        app: preview-server
+    spec:
+      containers:
+        - name: preview-server
+          image: k3d-vibeweb-registry:5050/vibeweb-preview-server:latest
+          ports:
+            - containerPort: 3002
+          envFrom:
+            - configMapRef:
+                name: vibeweb-config
+          volumeMounts:
+            - name: tenant-data
+              mountPath: /data
+      volumes:
+        - name: tenant-data
+          persistentVolumeClaim:
+            claimName: tenant-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: preview-server
+  namespace: vibeweb
+spec:
+  selector:
+    app: preview-server
+  ports:
+    - port: 3002
+      targetPort: 3002

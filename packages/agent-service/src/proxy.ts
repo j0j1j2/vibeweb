@@ -4,7 +4,6 @@ const PING_INTERVAL_MS = 25_000;
 
 export class SessionProxy {
   public lastActivityAt: number;
-  public onSessionId: ((id: string) => void) | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private sessionId: string, private userWs: WebSocket, private bridgeWs: WebSocket) {
@@ -28,10 +27,6 @@ export class SessionProxy {
     this.lastActivityAt = Date.now();
     try {
       const { type, ...rest } = JSON.parse(raw);
-      // Capture session_id from stream data
-      if (type === "stream" && rest.data?.session_id && this.onSessionId) {
-        this.onSessionId(rest.data.session_id);
-      }
       const enriched = type !== undefined
         ? { type, sessionId: this.sessionId, ...rest }
         : { sessionId: this.sessionId, ...rest };
